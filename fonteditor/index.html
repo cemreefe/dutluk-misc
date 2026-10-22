@@ -53,6 +53,7 @@ canvas{touch-action:none;cursor:crosshair}
   <div class="gbtns" id="gbtns"></div>
   <div class="ctbar" id="ctbar"></div>
   <label style="font-size:12px"><input type="checkbox" id="underlay" checked> photo underlay</label>
+  <div style="display:flex;gap:4px"><label class="btn" style="font-size:12px">photo&#8230;<input id="fphoto" type="file" accept="image/*" hidden></label><button id="bNoPhoto" title="remove photo for this glyph" style="font-size:12px">&#215;photo</button></div>
   <label style="font-size:12px"><input type="range" id="uop" min="0" max="1" step="0.05" value="0.55"></label>
   <div style="font-size:12px;margin-top:8px">metrics<br>bearing <input id="inb" type="number" style="width:60px;font:inherit"> adv <input id="ina" type="number" style="width:60px;font:inherit"></div>
 </div>
@@ -186,10 +187,14 @@ function autosave(){clearTimeout(saveT);saveT=setTimeout(()=>{
   for(const k in DATA.glyphs)st.metrics[k]=[DATA.glyphs[k][1],DATA.glyphs[k][2]||0];
   for(const k in DATA.meta){const m=DATA.meta[k];
     if(m.off||m.sc)st.uoff[k]={off:m.off,sc:m.sc};}
+  st.uimg=uimgs;
   try{localStorage.setItem(LS+setsel.value,JSON.stringify(st));}catch(e){}},300);}
 function restore(){try{const st=JSON.parse(localStorage.getItem(LS+setsel.value));if(!st)return false;
   for(const k in st.edits)edits[k]=st.edits[k];
   for(const k in st.metrics||{})if(DATA.glyphs[k]){DATA.glyphs[k][1]=st.metrics[k][0];DATA.glyphs[k][2]=st.metrics[k][1];}
+  for(const k in st.uimg||{}){const u=st.uimg[k];uimgs[k]=u;
+    if(!DATA.meta[k])DATA.meta[k]={x0:0,y0:0,x1:u.w,y1:u.h};
+    const im=new Image();im.src=u.src;im.onload=draw;imgs[k]=im;}
   for(const k in st.uoff||{})if(DATA.meta[k]){const u=st.uoff[k];
     if(Array.isArray(u))DATA.meta[k].off=u;
     else{DATA.meta[k].off=u.off;DATA.meta[k].sc=u.sc;}}
@@ -210,7 +215,20 @@ function buildCt(){ctb.innerHTML='';
   ctb.appendChild(plus);
   [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}]]
     .forEach(([t,ti,fn])=>{const b=document.createElement('button');b.textContent=t;b.title=ti;b.onclick=fn;ctb.appendChild(b);});}
-let clipCont=null;
+let clipCont=null,uimgs={};
+function setUnderlay(src,w,h){uimgs[g]={src,w,h};
+  const im=new Image();im.onload=()=>{imgs[g]=im;
+    DATA.meta[g]={x0:0,y0:0,x1:w,y1:h,off:[0,0],sc:Math.min(1,Math.round(h/700*10)/10)};
+    document.getElementById('underlay').checked=true;autosave();draw();};
+  im.src=src;}
+function loadImgFile(f){const fr=new FileReader();fr.onload=()=>{
+  const t=new Image();t.onload=()=>{
+    const s=Math.min(1,1600/Math.max(t.naturalWidth,t.naturalHeight));
+    const w=Math.round(t.naturalWidth*s),h=Math.round(t.naturalHeight*s);
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    c.getContext('2d').drawImage(t,0,0,w,h);
+    setUnderlay(c.toDataURL('image/jpeg',0.85),w,h);};
+  t.src=fr.result;};fr.readAsDataURL(f);}
 function copyCont(){const c=(edits[g]||[])[selC];if(!c||!c.length)return;
   clipCont=deep(c);document.getElementById('hint').textContent=`contour ${selC+1} copied (${c.length} nodes)`;}
 function pasteCont(){if(!clipCont)return;if(!edits[g])edits[g]=[];
@@ -457,6 +475,11 @@ addEventListener('keydown',e=>{
     if(target.has(key(ci,ni))){n.x+=ar[0]*st;n.y+=ar[1]*st;}}));
   markDirty();draw();});
 addEventListener('keyup',e=>{if(e.key===' ')spaceDown=false;});
+addEventListener('paste',e=>{const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));
+  if(it){loadImgFile(it.getAsFile());e.preventDefault();}});
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{const f=[...(e.dataTransfer?.files||[])].find(f=>f.type.startsWith('image/'));
+  if(f){loadImgFile(f);e.preventDefault();}});
 CV.addEventListener('dblclick',e=>{const h=pickNode(e);if(h){snap();toggleSmooth(...h);markDirty();draw();}});
 
 // ---------- controls ----------
@@ -473,6 +496,8 @@ document.getElementById('bReset').onclick=()=>{snap();edits[g]=toModel(DATA.glyp
   const gd=DATA.glyphs[g];/* keep metrics */sel.clear();delete dirty[g];markDirty();sync();draw();};
 document.getElementById('bFit').onclick=fit;
 document.getElementById('underlay').onchange=draw;
+document.getElementById('fphoto').onchange=e=>{if(e.target.files[0])loadImgFile(e.target.files[0]);e.target.value='';};
+document.getElementById('bNoPhoto').onclick=()=>{delete uimgs[g];delete imgs[g];delete DATA.meta[g];autosave();draw();};
 document.getElementById('uop').oninput=draw;
 document.getElementById('bExport').onclick=()=>{
   const out={__meta:{underlayOffsets:{},underlayScales:{}}};
