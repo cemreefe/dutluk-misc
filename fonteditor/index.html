@@ -230,12 +230,17 @@ function buildCt(){ctb.innerHTML='';
   (edits[g]||[]).forEach((c,ci)=>{const b=document.createElement('button');b.textContent=ci+1;
     b.className=(ci===selC?'on':'')+(neg[g]&&neg[g].has(ci)?' neg':'');
     if(neg[g]&&neg[g].has(ci))b.textContent=ci+1+'−';
-    b.onclick=()=>{selC=ci;sel.clear();sync();draw();};ctb.appendChild(b);});
+    b.onclick=()=>{selC=ci;sel=new Set(c.map((n,ni)=>key(ci,ni)));sync();draw();};ctb.appendChild(b);});
   const plus=document.createElement('button');plus.textContent='+';
   plus.onclick=()=>{snap();edits[g].push([]);selC=edits[g].length-1;markDirty();buildCt();sync();draw();};
   ctb.appendChild(plus);
-  [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}],['merge','weld active contour with contours it overlaps',mergeCont],['±','toggle contour positive/negative (subtracts on overlap)',()=>{if(selC<0)return;neg[g]=neg[g]||new Set();neg[g].has(selC)?neg[g].delete(selC):neg[g].add(selC);snap();autosave();buildCt();draw();}]]
-    .forEach(([t,ti,fn])=>{const b=document.createElement('button');b.textContent=t;b.title=ti;b.onclick=fn;ctb.appendChild(b);});}
+  [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}]]
+    .forEach(([t,ti,fn])=>{const b=document.createElement('button');b.textContent=t;b.title=ti;b.onclick=fn;ctb.appendChild(b);});
+  const tb=document.createElement('button');tb.textContent='±';
+  tb.title='toggle: contour subtracts (negative) where it overlaps others';
+  if(neg[g]&&neg[g].has(selC))tb.className='on';
+  tb.onclick=()=>{if(selC<0)return;neg[g]=neg[g]||new Set();neg[g].has(selC)?neg[g].delete(selC):neg[g].add(selC);snap();autosave();buildCt();draw();};
+  ctb.appendChild(tb);}
 let clipCont=null,uimgs={},neg={};
 // ---------- polygon union (flattened) ----------
 function segInt2(a,b,c,d){const rx=b[0]-a[0],ry=b[1]-a[1],sx=d[0]-c[0],sy=d[1]-c[1];
@@ -412,13 +417,15 @@ pvtext.addEventListener('input',drawPreview);
 // ---------- interaction ----------
 let drag=null,box=null,pan=null,vpan=null,spaceDown=false,tool='pen';
 const hitR=9/S();
+function cOrder(){const cs=edits[g]||[];
+  return[...cs.keys()].sort((a,b)=>(a===selC?-1:b===selC?1:b-a));}
 function pickNode(e){const r=CV.getBoundingClientRect(),cx=e.clientX-r.left,cy=e.clientY-r.top;
-  for(let ci=(edits[g]||[]).length-1;ci>=0;ci--)for(let ni=edits[g][ci].length-1;ni>=0;ni--){
+  for(const ci of cOrder())for(let ni=edits[g][ci].length-1;ni>=0;ni--){
     const[a,b]=P(edits[g][ci][ni].x,edits[g][ci][ni].y);
     if(Math.hypot(a-cx,b-cy)<9)return[ci,ni];}
   return null;}
 function pickHandle(e){const r=CV.getBoundingClientRect(),cx=e.clientX-r.left,cy=e.clientY-r.top;
-  for(let ci=(edits[g]||[]).length-1;ci>=0;ci--)for(let ni=edits[g][ci].length-1;ni>=0;ni--){
+  for(const ci of cOrder())for(let ni=edits[g][ci].length-1;ni>=0;ni--){
     const n=edits[g][ci][ni];
     for(const w of ['o','i']){if(!n[w])continue;
       const[hx,hy]=P(n.x+n[w][0],n.y+n[w][1]);
