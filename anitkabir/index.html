@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="tr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anıtkabir — inscription typeface</title>
+<title>Anıtkabir — kitabe yazısı</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
   @font-face {
     font-family: 'Anitkabir';
@@ -19,24 +20,33 @@
     color: #1a1a18;
     font-family: ui-sans-serif, system-ui, Helvetica, Arial, sans-serif;
   }
-  main { max-width: 960px; margin: 0 auto; padding: 48px 20px 80px; }
+  main { max-width: 960px; margin: 0 auto; padding: 40px 20px 80px; }
+  header { display: flex; align-items: center; gap: 16px; }
+  header img.mark { width: 64px; height: 60px; }
+  .lang { margin-left: auto; font-size: 13px; }
+  .lang button {
+    background: none; border: 1px solid #999; padding: 4px 10px;
+    cursor: pointer; font: inherit; color: #1a1a18;
+  }
+  .lang button.on { background: #1a1a18; color: #e8e2d0; }
   h1 {
     font-family: 'Anitkabir', serif;
     font-weight: normal;
-    font-size: clamp(56px, 10vw, 120px);
-    margin: 0 0 8px;
+    font-size: clamp(56px, 10vw, 110px);
+    margin: 0;
     letter-spacing: 0.02em;
   }
-  .meta { font-size: 14px; line-height: 1.6; max-width: 60ch; color: #333; }
+  .meta { font-size: 14px; line-height: 1.6; max-width: 62ch; color: #333; margin-top: 12px; }
   .meta p { margin: 6px 0; }
   .specimen {
     font-family: 'Anitkabir', serif;
-    font-size: clamp(34px, 6vw, 72px);
+    font-size: clamp(30px, 5.4vw, 60px);
     line-height: 1.25;
-    margin: 40px 0;
+    margin: 36px 0;
     word-break: break-all;
   }
-  .tester { margin: 40px 0; }
+  .specimen .punct { font-size: 0.55em; }
+  .tester { margin: 36px 0; }
   .tester input {
     width: 100%;
     font-size: 18px;
@@ -55,7 +65,10 @@
   }
   .row { display: flex; gap: 16px; align-items: center; margin-top: 10px; font-size: 13px; color: #444; flex-wrap: wrap; }
   .row input[type=range] { width: 200px; }
-  a.dl {
+  figure { margin: 44px 0 8px; }
+  figure img { width: 100%; border: 1px solid #b9ae8e; display: block; }
+  figcaption { font-size: 13px; color: #555; margin-top: 8px; }
+  a.dl, a.ed {
     display: inline-block;
     margin-top: 24px;
     padding: 10px 18px;
@@ -64,46 +77,99 @@
     text-decoration: none;
     font-size: 14px;
   }
-  footer { margin-top: 56px; font-size: 12px; color: #555; line-height: 1.7; }
-  code { background: #ddd6c2; padding: 1px 5px; }
+  a.ed { background: none; color: #1a1a18; border: 1px solid #1a1a18; margin-left: 12px; }
+  footer { margin-top: 48px; font-size: 12px; color: #555; line-height: 1.7; }
 </style>
 </head>
 <body>
 <main>
-  <h1>ANITKABİR</h1>
+  <header>
+    <img class="mark" src="logo.svg" alt="Anıtkabir A">
+    <h1>ANITKABİR</h1>
+    <div class="lang">
+      <button id="btn-tr" class="on">TR</button><button id="btn-en">EN</button>
+    </div>
+  </header>
   <div class="meta">
-    <p>Inscription capitals digitized from the lettering Emin Barın cut into the walls of
-    Atatürk's mausoleum in 1952 (Gençliğe Hitabe and the 10th-Year Speech tablets).</p>
-    <p>Traced from Metin Akın's 2015 FontLab Studio digitization poster
-    (Hacettepe University, GRA666).</p>
-    <p>Coverage: A–Z except Q W X, plus Ç Ğ İ Ö Ş Ü and period.
-    Lowercase maps to the same capitals. No digits or other punctuation.</p>
+    <p data-i18n="intro"></p>
+    <p data-i18n="trace"></p>
+    <p data-i18n="cov"></p>
   </div>
 
-  <div class="specimen">ABCÇDEFG ĞHIİJKLM<br>NOÖPRSŞ TUÜVYZ.</div>
+  <div class="specimen">ABCÇDEFG ĞHIİJKLM<br>NOÖPRSŞ TUÜVYZ ÂÎÛ<br><span class="punct">0123456789 .,:;?!-–'" /</span></div>
 
   <div class="tester">
-    <input id="t" type="text" value="YURTTA SULH CİHANDA SULH" autocomplete="off" spellcheck="false">
-    <div class="out" id="o">YURTTA SULH CİHANDA SULH</div>
+    <input id="t" type="text" autocomplete="off" spellcheck="false">
+    <div class="out" id="o"></div>
     <div class="row">
-      <label>size <input id="s" type="range" min="24" max="140" value="64"></label>
+      <label><span data-i18n="size"></span> <input id="s" type="range" min="24" max="140" value="64"></label>
       <span id="sv">64px</span>
-      <span>unmapped characters fall back to the system font</span>
+      <span data-i18n="fallback"></span>
     </div>
   </div>
 
-  <a class="dl" href="Anitkabir-Regular.ttf" download>Download Anitkabir-Regular.ttf</a>
+  <figure>
+    <img src="tablet.jpg" alt="" data-i18n-alt="imgalt">
+    <figcaption data-i18n="caption"></figcaption>
+  </figure>
+
+  <a class="dl" href="Anitkabir-Regular.ttf" download data-i18n="dl"></a>
+  <a class="ed" href="editor/" data-i18n="ed"></a>
 
   <footer>
-    <p>Lettering: Emin Barın (1952). Digitization: Metin Akın (2015).
-    This TTF is a poster re-trace for personal use — credit both names if you ship it.</p>
+    <p data-i18n="credit"></p>
   </footer>
 </main>
 <script>
-  const t = document.getElementById('t'), o = document.getElementById('o'),
-        s = document.getElementById('s'), sv = document.getElementById('sv');
-  t.addEventListener('input', () => o.textContent = t.value || ' ');
-  s.addEventListener('input', () => { o.style.fontSize = s.value + 'px'; sv.textContent = s.value + 'px'; });
+const I18N = {
+  tr: {
+    doc: 'Kitabe yazısı',
+    intro: "1952'de Emin Barın'ın Anıtkabir duvarlarına işlediği kitabe harflerinden sayısallaştırılmış büyük harf fontu (Gençliğe Hitabe ve Onuncu Yıl Nutku tabletleri).",
+    trace: "Metin Akın'ın 2015 FontLab Studio dijitalleştirme posterinden izlendi (Hacettepe Üniversitesi, GRA666).",
+    cov: "Kapsam: Q W X dışında A–Z, ayrıca Ç Ğ İ Ö Ş Ü, şapkalı Â Î Û, 0–9 ve noktalama işaretleri. Küçük harfler aynı büyük harflere eşlenir.",
+    size: 'boyut',
+    fallback: 'tanımsız karakterler sistem fontuna düşer',
+    caption: 'Özgün kitabe — Anıtkabir, Emin Barın, 1952. Fontta İ ile Â şapkası taş üzerinden modellendi.',
+    imgalt: 'Anıtkabir kitabesi, perspektif düzeltilmiş fotoğraf',
+    dl: 'Anitkabir-Regular.ttf indir',
+    ed: 'Bir harfi düzelt → tracer',
+    credit: 'Harf çizimi: Emin Barın (1952). Sayısallaştırma: Metin Akın (2015). Bu TTF poster üzerinden izlenmiştir — kişisel kullanım için; yayınlarsanız iki ismi de anın.',
+    ph: 'YURTTA SULH CİHANDA SULH'
+  },
+  en: {
+    doc: 'Inscription typeface',
+    intro: "Inscription capitals digitized from the lettering Emin Barın cut into the walls of Atatürk's mausoleum in 1952 (Gençliğe Hitabe and the 10th-Year Speech tablets).",
+    trace: "Traced from Metin Akın's 2015 FontLab Studio digitization poster (Hacettepe University, GRA666).",
+    cov: "Coverage: A–Z except Q W X, plus Ç Ğ İ Ö Ş Ü, circumflexed Â Î Û, 0–9 and punctuation. Lowercase maps to the same capitals.",
+    size: 'size',
+    fallback: 'unmapped characters fall back to the system font',
+    caption: 'The original inscription — Anıtkabir, lettering by Emin Barın, 1952. Deskewed photo.',
+    imgalt: 'The Anıtkabir inscription, perspective-corrected photo',
+    dl: 'Download Anitkabir-Regular.ttf',
+    ed: 'Fix a glyph → tracer',
+    credit: 'Lettering: Emin Barın (1952). Digitization: Metin Akın (2015). This TTF is a poster re-trace for personal use — credit both names if you ship it.',
+    ph: 'MUSTAFA KEMÂL ATATÜRK'
+  }
+};
+const t = document.getElementById('t'), o = document.getElementById('o'),
+      s = document.getElementById('s'), sv = document.getElementById('sv');
+function setLang(l) {
+  document.documentElement.lang = l;
+  document.title = 'Anıtkabir — ' + I18N[l].doc;
+  document.querySelectorAll('[data-i18n]').forEach(e => e.textContent = I18N[l][e.dataset.i18n]);
+  document.querySelectorAll('[data-i18n-alt]').forEach(e => e.alt = I18N[l][e.dataset.i18nAlt]);
+  document.getElementById('btn-tr').classList.toggle('on', l === 'tr');
+  document.getElementById('btn-en').classList.toggle('on', l === 'en');
+  if (!t.dataset.typed) { t.value = I18N[l].ph; o.textContent = I18N[l].ph; }
+  try { localStorage.aklang = l; } catch(e) {}
+}
+document.getElementById('btn-tr').onclick = () => setLang('tr');
+document.getElementById('btn-en').onclick = () => setLang('en');
+t.addEventListener('input', () => { t.dataset.typed = 1; o.textContent = t.value || ' '; });
+s.addEventListener('input', () => { o.style.fontSize = s.value + 'px'; sv.textContent = s.value + 'px'; });
+let l = 'tr';
+try { l = localStorage.aklang || (navigator.language || '').startsWith('en') && 'en' || 'tr'; } catch(e) {}
+setLang(l);
 </script>
 </body>
 </html>
