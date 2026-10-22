@@ -17,30 +17,36 @@ h1{font-size:15px;margin:0}
 .pts b{cursor:pointer}
 .pts b.on{color:var(--danger)}
 button{padding:6px 10px}
-canvas{}
 #src{touch-action:none;cursor:crosshair}
 .hint{font-size:11px;opacity:.75}
 #outw,#outh{width:60px;font:inherit;padding:2px 4px}
+#url{width:170px;font:inherit;padding:2px 4px}
+#empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--ink2);padding:20px;pointer-events:none;line-height:1.5;font-size:13px}
+#srcwrap{position:relative;font-size:0}
+.dragover #src{outline:2px dashed var(--acc);outline-offset:-2px}
 </style>
 </head>
 <body>
 <div id="app">
 <div class="panel">
   <h1>Warp deskew</h1>
-  <div class="hint">drag the 4 corners onto the tablet frame · click a corner name then nudge with arrow keys · preview updates live</div>
+  <div class="hint">load an image: paste (ctrl/cmd+V), drop a file, or enter a URL</div>
+  <div><input id="url" placeholder="image url"><button id="bUrl">load</button></div>
+  <div><button id="bFile">open file</button><input id="file" type="file" accept="image/*" style="display:none"></div>
+  <div class="hint">then drag the 4 corners onto the frame · click a corner name and nudge with arrow keys (shift = 10px)</div>
   <div class="pts" id="pts"></div>
   <div>
     out size <input id="outw" value="1600">×<input id="outh" value="2000">
   </div>
-  <button id="bCopy">copy quad (full-res)</button>
+  <button id="bCopy">copy quad</button>
   <button id="bPaste">paste quad</button>
   <button id="bDl">download warped</button>
   <button id="bReset">reset corners</button>
-  <div class="hint">send me the copied quad for a full-res re-warp, or use the download directly (it's from the 1800px copy)</div>
+  <div class="hint">quad coords are in the loaded image's own pixels</div>
   <div><a href="../">← font editor</a></div>
 </div>
-<canvas id="src"></canvas>
-<canvas id="prev" width="480" height="600"></canvas>
+<div id="srcwrap"><canvas id="src" width="620" height="420"></canvas><div id="empty">no image<br>paste · drop · url</div></div>
+<canvas id="prev" width="480" height="600" style="display:none"></canvas>
 </div>
 <div id="pastebox" style="display:none;position:fixed;top:18%;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--ink);padding:14px;z-index:9;width:340px;box-shadow:4px 4px 0 var(--shadow)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>paste quad</b><button id="pbClose">× close</button></div>
@@ -48,30 +54,57 @@ canvas{}
   <button id="pbGo" style="margin-top:8px">submit</button>
 </div>
 <script>
-// full photo is 3000x4000; bundled copy is 1800x2400 (K=0.6)
-const K=0.6, FW=1800, FH=2400;
-const DEF=[[882,839],[2048,1049],[2990,3815],[60,3845]]; // TL TR BR BL, full-res
 const NAMES=['TL','TR','BR','BL'];
 const CV_=n=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
 const img=new Image();
-let quad=DEF.map(p=>p.slice()), cur=0, data=null;
+let quad=null, cur=0, data=null, FW=0, FH=0;
 const sc=document.getElementById('src'),sctx=sc.getContext('2d');
 const pc=document.getElementById('prev'),pctx=pc.getContext('2d');
+const empty=document.getElementById('empty');
+const defq=()=>[[FW*.04,FH*.04],[FW*.96,FH*.04],[FW*.96,FH*.96],[FW*.04,FH*.96]];
 
-img.onload=()=>{
-  sc.width=620; sc.height=Math.round(FH*620/FW);
-  sctx.drawImage(img,0,0,FW,FH,0,0,sc.width,sc.height);
-  const t=document.createElement('canvas');t.width=FW;t.height=FH;
-  const tc=t.getContext('2d');tc.drawImage(img,0,0,FW,FH);
-  data=tc.getImageData(0,0,FW,FH);
-  draw();preview();
-};
-img.src='../photo.jpg';
+function loadSrc(src,cors){
+  img.crossOrigin=cors?'anonymous':null;
+  img.onload=()=>{
+    FW=img.naturalWidth;FH=img.naturalHeight;
+    sc.width=Math.min(620,FW); sc.height=Math.round(FH*sc.width/FW);
+    const t=document.createElement('canvas');t.width=FW;t.height=FH;
+    const tc=t.getContext('2d');tc.drawImage(img,0,0);
+    try{data=tc.getImageData(0,0,FW,FH);}
+    catch(e){alert('image loaded but canvas is blocked by CORS — preview/download will not work');data=null;}
+    quad=defq();empty.style.display='none';pc.style.display='';
+    draw();rows();preview();};
+  img.onerror=()=>{
+    if(cors)loadSrc(src,false); // retry without CORS (image shows, canvas may taint)
+    else alert('could not load image');};
+  img.src=src;
+}
+function loadBlob(b){loadSrc(URL.createObjectURL(b),false);}
 
-const fit=p=>[p[0]*K*sc.width/FW, p[1]*K*sc.height/FH]; // full-res→canvas
-const unfit=p=>[p[0]*FW/sc.width/K, p[1]*FH/sc.height/K];
+// paste image
+addEventListener('paste',e=>{
+  const it=[...(e.clipboardData||[]).items].find(i=>i.type.startsWith('image/'));
+  if(it){loadBlob(it.getAsFile());e.preventDefault();}});
+// url + file
+document.getElementById('bUrl').onclick=()=>{const u=document.getElementById('url').value.trim();if(u)loadSrc(u,true);};
+document.getElementById('url').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('bUrl').click();});
+document.getElementById('bFile').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{if(e.target.files[0])loadBlob(e.target.files[0]);};
+// drag & drop
+['dragenter','dragover'].forEach(t=>addEventListener(t,e=>{e.preventDefault();document.body.classList.add('dragover');}));
+['dragleave','drop'].forEach(t=>addEventListener(t,e=>{e.preventDefault();if(t==='dragleave'&&e.relatedTarget)return;document.body.classList.remove('dragover');}));
+addEventListener('drop',e=>{
+  const f=e.dataTransfer.files&&e.dataTransfer.files[0];
+  if(f&&f.type.startsWith('image/')){loadBlob(f);return;}
+  const u=e.dataTransfer.getData('text/uri-list')||e.dataTransfer.getData('text/plain');
+  if(u&&/^https?:\/\//.test(u.trim()))loadSrc(u.trim(),true);});
+
+const fit=p=>[p[0]*sc.width/FW, p[1]*sc.height/FH];
+const unfit=p=>[p[0]*FW/sc.width, p[1]*FH/sc.height];
 
 function draw(){
+  sctx.clearRect(0,0,sc.width,sc.height);
+  if(!img.src)return;
   sctx.drawImage(img,0,0,FW,FH,0,0,sc.width,sc.height);
   sctx.beginPath();
   quad.forEach((p,i)=>{const[a,b]=fit(p);i?sctx.lineTo(a,b):sctx.moveTo(a,b);});
@@ -83,6 +116,7 @@ function draw(){
 const ptsEl=document.getElementById('pts');
 function rows(){
   ptsEl.innerHTML='';
+  if(!quad)return;
   quad.forEach((p,i)=>{
     const b=document.createElement('b');b.textContent=NAMES[i];
     b.className=i===cur?'on':'';b.onclick=()=>{cur=i;draw();rows();};
@@ -95,10 +129,9 @@ rows();
 
 let drag=-1;
 sc.addEventListener('mousedown',e=>{
+  if(!quad)return;
   const r=sc.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
-  drag=quad.findIndex(p=>{const[a,b]=fit(p);return Math.hypot(a-mx,b-my)<14;});
-  if(drag<0)drag=quad.findIndex(()=>false);
-});
+  drag=quad.findIndex(p=>{const[a,b]=fit(p);return Math.hypot(a-mx,b-my)<14;});});
 addEventListener('mousemove',e=>{
   if(drag<0)return;
   const r=sc.getBoundingClientRect();
@@ -106,8 +139,10 @@ addEventListener('mousemove',e=>{
   cur=drag;draw();rows();});
 addEventListener('mouseup',()=>{if(drag>=0){preview();drag=-1;}});
 addEventListener('keydown',e=>{
+  if(!quad)return;
   const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
-  if(!d)return;e.preventDefault();
+  if(!d)return;if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  e.preventDefault();
   const st=e.shiftKey?10:1;
   quad[cur][0]+=d[0]*st;quad[cur][1]+=d[1]*st;draw();rows();preview();});
 
@@ -116,7 +151,6 @@ function hom(s,d){ // src quad → dst rect, returns h[8]
   for(let i=0;i<4;i++){const[x,y]=s[i],[u,v]=d[i];
     A.push([x,y,1,0,0,0,-u*x,-u*y]);B.push(u);
     A.push([0,0,0,x,y,1,-v*x,-v*y]);B.push(v);}
-  // gauss elim 8x8
   for(let c=0;c<8;c++){
     let m=c;for(let r=c+1;r<8;r++)if(Math.abs(A[r][c])>Math.abs(A[m][c]))m=r;
     [A[c],A[m]]=[A[m],A[c]];[B[c],B[m]]=[B[m],B[c]];
@@ -126,10 +160,9 @@ function hom(s,d){ // src quad → dst rect, returns h[8]
   for(let r=7;r>=0;r--){let s2=B[r];for(let k=r+1;k<8;k++)s2-=A[r][k]*h[k];h[r]=s2/A[r][r];}
   return h;}
 
-function warp(dstW,dstH){ // quad in full-res → canvas dstW×dstH at FILE res
-  const q=quad.map(p=>[p[0]*K,p[1]*K]);
-  const h=hom([[0,0],[dstW,0],[dstW,dstH],[0,dstH]],q); // dst→src
-  const out=pctx.createImageData?new ImageData(dstW,dstH):null;
+function warp(dstW,dstH){ // quad in image px → canvas dstW×dstH
+  const h=hom([[0,0],[dstW,0],[dstW,dstH],[0,dstH]],quad); // dst→src
+  const out=new ImageData(dstW,dstH);
   const od=out.data,sd=data.data,sw=FW;
   for(let y=0;y<dstH;y++)for(let x=0;x<dstW;x++){
     const w=h[6]*x+h[7]*y+1;
@@ -152,33 +185,39 @@ function sizePrev(){
   else{pc.height=600;pc.width=Math.round(600*W/H);}}
 function preview(){
   clearTimeout(pT);
-  pT=setTimeout(()=>{sizePrev();const o=warp(pc.width,pc.height);pctx.putImageData(o,0,0);},80);}
+  pT=setTimeout(()=>{if(!data)return;sizePrev();const o=warp(pc.width,pc.height);pctx.putImageData(o,0,0);},80);}
 document.getElementById('outw').oninput=preview;
 document.getElementById('outh').oninput=preview;
 
+const need=()=>{if(!data){alert('load an image first');return true;}return false;};
 document.getElementById('bCopy').onclick=()=>{
+  if(need())return;
   const t=JSON.stringify(quad.map(p=>p.map(Math.round)));
-  navigator.clipboard.writeText(t);
+  navigator.clipboard.writeText(t).catch(()=>{});
   const o=document.createElement('textarea');o.value=t;document.body.appendChild(o);o.select();document.execCommand('copy');o.remove();
   alert('copied: '+t);};
 document.getElementById('bDl').onclick=()=>{
+  if(need())return;
   const W=+document.getElementById('outw').value,H=+document.getElementById('outh').value;
   const o=warp(W,H);
   const c=document.createElement('canvas');c.width=W;c.height=H;
   c.getContext('2d').putImageData(o,0,0);
   const a=document.createElement('a');a.href=c.toDataURL('image/jpeg',0.92);a.download='warped.jpg';a.click();};
-document.getElementById('bReset').onclick=()=>{quad=DEF.map(p=>p.slice());draw();rows();preview();};
+document.getElementById('bReset').onclick=()=>{if(need())return;quad=defq();draw();rows();preview();};
 const pb=document.getElementById('pastebox');
 document.getElementById('bPaste').onclick=()=>{pb.style.display='block';document.getElementById('pbText').focus();};
 document.getElementById('pbClose').onclick=()=>{pb.style.display='none';};
 document.getElementById('pbGo').onclick=()=>{
+  if(need())return;
   const nums=(document.getElementById('pbText').value.match(/-?\d+/g)||[]).map(Number);
   if(nums.length>=8){
     quad=[[nums[0],nums[1]],[nums[2],nums[3]],[nums[4],nums[5]],[nums[6],nums[7]]];
     draw();rows();preview();pb.style.display='none';}
   else alert('need 8 numbers (TL,TR,BR,BL)');};
 addEventListener('du:theme',draw);
-// arrow-key nudge uses shift for 10px steps; inputs also live-edit
+// ?img=<url> loads on boot
+const qi=new URLSearchParams(location.search).get('img');
+if(qi)loadSrc(qi,true);
 </script>
 </body>
 </html>
