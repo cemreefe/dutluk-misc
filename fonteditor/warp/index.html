@@ -33,6 +33,7 @@ a{color:#14100a}
     out size <input id="outw" value="1600">×<input id="outh" value="2000">
   </div>
   <button id="bCopy">copy quad (full-res)</button>
+  <button id="bPaste">paste quad</button>
   <button id="bDl">download warped</button>
   <button id="bReset">reset corners</button>
   <div class="hint">send me the copied quad for a full-res re-warp, or use the download directly (it's from the 1800px copy)</div>
@@ -40,6 +41,11 @@ a{color:#14100a}
 </div>
 <canvas id="src"></canvas>
 <canvas id="prev" width="480" height="600"></canvas>
+</div>
+<div id="pastebox" style="display:none;position:fixed;top:18%;left:50%;transform:translateX(-50%);background:#efe9d8;border:1px solid #14100a;padding:14px;z-index:9;width:340px;box-shadow:4px 4px 0 rgba(0,0,0,.25)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>paste quad</b><button id="pbClose">× close</button></div>
+  <textarea id="pbText" style="width:100%;height:90px;font:inherit;box-sizing:border-box" placeholder="[[882,839],[2048,1049],[2990,3815],[60,3845]]"></textarea>
+  <button id="pbGo" style="margin-top:8px">submit</button>
 </div>
 <script>
 // full photo is 3000x4000; bundled copy is 1800x2400 (K=0.6)
@@ -138,9 +144,16 @@ function warp(dstW,dstH){ // quad in full-res → canvas dstW×dstH at FILE res
   return out;}
 
 let pT=null;
+function sizePrev(){
+  const W=Math.max(1,+document.getElementById('outw').value||1600),
+        H=Math.max(1,+document.getElementById('outh').value||2000);
+  if(W>=H){pc.width=480;pc.height=Math.round(480*H/W);}
+  else{pc.height=600;pc.width=Math.round(600*W/H);}}
 function preview(){
   clearTimeout(pT);
-  pT=setTimeout(()=>{const o=warp(pc.width,pc.height);pctx.putImageData(o,0,0);},80);}
+  pT=setTimeout(()=>{sizePrev();const o=warp(pc.width,pc.height);pctx.putImageData(o,0,0);},80);}
+document.getElementById('outw').oninput=preview;
+document.getElementById('outh').oninput=preview;
 
 document.getElementById('bCopy').onclick=()=>{
   const t=JSON.stringify(quad.map(p=>p.map(Math.round)));
@@ -154,6 +167,16 @@ document.getElementById('bDl').onclick=()=>{
   c.getContext('2d').putImageData(o,0,0);
   const a=document.createElement('a');a.href=c.toDataURL('image/jpeg',0.92);a.download='warped.jpg';a.click();};
 document.getElementById('bReset').onclick=()=>{quad=DEF.map(p=>p.slice());draw();rows();preview();};
+const pb=document.getElementById('pastebox');
+document.getElementById('bPaste').onclick=()=>{pb.style.display='block';document.getElementById('pbText').focus();};
+document.getElementById('pbClose').onclick=()=>{pb.style.display='none';};
+document.getElementById('pbGo').onclick=()=>{
+  const nums=(document.getElementById('pbText').value.match(/-?\d+/g)||[]).map(Number);
+  if(nums.length>=8){
+    quad=[[nums[0],nums[1]],[nums[2],nums[3]],[nums[4],nums[5]],[nums[6],nums[7]]];
+    draw();rows();preview();pb.style.display='none';}
+  else alert('need 8 numbers (TL,TR,BR,BL)');};
+// arrow-key nudge uses shift for 10px steps; inputs also live-edit
 </script>
 </body>
 </html>
