@@ -29,6 +29,7 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
 <div id="app">
 <div id="side">
   <h1>Font editor</h1>
+  <label style="font-size:12px">font <select id="setsel" style="font:inherit;max-width:150px"></select></label>
   <div id="hintside" style="font-size:11px">click: add point &middot; drag point: move<br>ctrl+click segment: insert &middot; dbl-click point: corner/smooth<br>del: remove point</div>
   <div class="gbtns" id="gbtns"></div>
   <label style="font-size:12px"><input type="checkbox" id="underlay" checked> photo underlay</label>
@@ -50,7 +51,6 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
   <textarea id="out"></textarea>
 </div>
 </div>
-<script src="anitkabir.js"></script>
 <script>
 const CV=document.getElementById('cv'),ctx=CV.getContext('2d');
 const X0=-60,X1=680,Y0=-160,Y1=800; // font-unit window
@@ -60,7 +60,6 @@ const F=(cx,cy)=>[cx/S+X0,Y1-cy/S];  // canvas→font
 
 // editable model: contour = [{x,y,s}] closed
 const edits={};
-for(const[g,d]of Object.entries(DATA.glyphs))edits[g]=toModel(d[0]);
 function toModel(conts){return conts.map(c=>{
   const pts=[];let cur=null;
   for(const seg of c){
@@ -71,6 +70,12 @@ function toModel(conts){return conts.map(c=>{
       for(let i=1;i<=3;i++){const t=i/3,u=1-t;
         pts.push({x:u*u*u*p0[0]+3*u*u*t*c1[0]+3*u*t*t*c2[0]+t*t*t*p1[0],
                   y:u*u*u*p0[1]+3*u*u*t*c1[1]+3*u*t*t*c2[1]+t*t*t*p1[1],s:i<3});}
+      cur=p1;}
+    else if(seg[0]==='Q'){ // sample quadratic into 3 pts
+      const p0=cur,c=[seg[1],seg[2]],p1=[seg[3],seg[4]];
+      for(let i=1;i<=3;i++){const t=i/3,u=1-t;
+        pts.push({x:u*u*p0[0]+2*u*t*c[0]+t*t*p1[0],
+                  y:u*u*p0[1]+2*u*t*c[1]+t*t*p1[1],s:i<3});}
       cur=p1;}
   }return pts;});}
 function toCmds(pts){
@@ -91,14 +96,20 @@ function pathOf(cont){
   cont.forEach((p,i)=>{const[a,b]=P(p.x,p.y);i?ctx.lineTo(a,b):ctx.moveTo(a,b);});
   ctx.closePath();}
 
-let g='5',ci=0,sel=-1,imgs={};
-for(const k in DATA.underlays){const im=new Image();im.src=DATA.underlays[k];im.onload=draw;imgs[k]=im;}
-
+let g='',ci=0,sel=-1,imgs={};
 const gb=document.getElementById('gbtns');
-for(const k of Object.keys(DATA.glyphs)){
-  const b=document.createElement('button');b.textContent=k;
-  b.onclick=()=>{g=k;ci=0;sel=-1;sync();draw();};
-  b.dataset.g=k;gb.appendChild(b);}
+function buildGlyphs(){
+  gb.innerHTML='';
+  for(const k of Object.keys(DATA.glyphs)){
+    const b=document.createElement('button');b.textContent=k;
+    b.onclick=()=>{g=k;ci=0;sel=-1;sync();draw();};
+    b.dataset.g=k;gb.appendChild(b);}}
+function init(){
+  for(const k in edits)delete edits[k];
+  for(const[k,d]of Object.entries(DATA.glyphs))edits[k]=toModel(d[0]);
+  imgs={};for(const k in DATA.underlays){const im=new Image();im.src=DATA.underlays[k];im.onload=draw;imgs[k]=im;}
+  buildGlyphs();
+  g=Object.keys(DATA.glyphs)[0];ci=0;sel=-1;sync();draw();}
 function sync(){document.querySelectorAll('#gbtns button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
   document.getElementById('hint').textContent=`glyph "${g}" · ${edits[g].length} contour(s) · editing contour ${ci+1}`;}
 
@@ -182,12 +193,16 @@ document.getElementById('fopen').onchange=e=>{
         edits[k]=toModel(v[0]);DATA.glyphs[k]=v;
       }
     }
-    gb.innerHTML='';for(const k of Object.keys(DATA.glyphs)){
-      const b=document.createElement('button');b.textContent=k;
-      b.onclick=()=>{g=k;ci=0;sel=-1;sync();draw();};
-      b.dataset.g=k;gb.appendChild(b);}
+    buildGlyphs();
     g=Object.keys(src)[0];ci=0;sel=-1;sync();draw();});};
-sync();draw();
+const FONTS=['default','anitkabir'];
+const setsel=document.getElementById('setsel');
+FONTS.forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;setsel.appendChild(o);});
+function loadSet(n){
+  const sc=document.createElement('script');sc.src=n+'.js';
+  sc.onload=()=>{setsel.value=n;init();};document.head.appendChild(sc);}
+setsel.onchange=()=>{const n=setsel.value;history.replaceState(0,'','?set='+n);loadSet(n);};
+loadSet(new URLSearchParams(location.search).get('set')||'default');
 </script>
 </body>
 </html>
