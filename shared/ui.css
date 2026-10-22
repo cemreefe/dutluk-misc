@@ -1,0 +1,32 @@
+/* dutluk shared UI — tokens + dark theme + theme toggle button.
+   Apps: <link rel="stylesheet" href="/shared/ui.css"> then <script src="/shared/ui.js"></script> in <head>.
+   Theme resolution: data-theme attr > localStorage du_theme > prefers-color-scheme. */
+:root{
+  --bg:#e8e2d0; --ink:#14100a; --line:#c8bfa4; --acc:#8a6d3b;
+  --panel:#efe9d8; --panel2:#f4f0e2; --ink2:#555; --danger:#b00;
+  --fill:rgba(20,16,10,.13); --accf:rgba(138,109,59,.6);
+  --shadow:rgba(0,0,0,.25);
+}
+:root[data-theme=dark]{
+  --bg:#1b1812; --ink:#e8e2d0; --line:#4a4030; --acc:#c9a86a;
+  --panel:#242019; --panel2:#2b251b; --ink2:#a99e85; --danger:#e06060;
+  --fill:rgba(232,226,208,.10); --accf:rgba(201,168,106,.6);
+  --shadow:rgba(0,0,0,.55);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme]){
+    --bg:#1b1812; --ink:#e8e2d0; --line:#4a4030; --acc:#c9a86a;
+    --panel:#242019; --panel2:#2b251b; --ink2:#a99e85; --danger:#e06060;
+    --fill:rgba(232,226,208,.10); --accf:rgba(201,168,106,.6);
+    --shadow:rgba(0,0,0,.55);
+  }
+}
+body{background:var(--bg);color:var(--ink)}
+button,.btn{color:var(--ink);font:inherit}
+button,.btn{border:1px solid var(--ink);background:none;cursor:pointer}
+button:hover,.btn:hover{background:var(--ink);color:var(--bg)}
+input,textarea,select{border:1px solid var(--line);background:var(--panel2);color:var(--ink)}
+a{color:var(--ink)}
+canvas{border:1px solid var(--line);background:var(--panel)}
+#du-theme{position:fixed;right:10px;bottom:10px;z-index:99;
+  font:12px ui-monospace,Menlo,Consolas,monospace;padding:4px 10px;opacity:.8}

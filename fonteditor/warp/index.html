@@ -5,22 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Warp — perspective deskew</title>
 <link rel="icon" type="image/svg+xml" href="../../anitkabir/logo.svg">
+<link rel="stylesheet" href="/shared/ui.css">
+<script src="/shared/ui.js"></script>
 <style>
-body{margin:0;background:#e8e2d0;color:#14100a;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+body{margin:0;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
 #app{display:flex;gap:14px;padding:12px;align-items:flex-start;flex-wrap:wrap}
 .panel{width:300px;display:flex;flex-direction:column;gap:8px}
 h1{font-size:15px;margin:0}
 .pts{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px;align-items:center}
-.pts input{width:70px;font:inherit;padding:2px 4px;border:1px solid #c8bfa4;background:#f4f0e2}
+.pts input{width:70px;font:inherit;padding:2px 4px}
 .pts b{cursor:pointer}
-.pts b.on{color:#b00}
-button{padding:6px 10px;background:none;border:1px solid #14100a;cursor:pointer;font:inherit;color:#14100a}
-button:hover{background:#14100a;color:#e8e2d0}
-canvas{border:1px solid #c8bfa4;background:#efe9d8}
+.pts b.on{color:var(--danger)}
+button{padding:6px 10px}
+canvas{}
 #src{touch-action:none;cursor:crosshair}
 .hint{font-size:11px;opacity:.75}
-#outw,#outh{width:60px;font:inherit;padding:2px 4px;border:1px solid #c8bfa4;background:#f4f0e2}
-a{color:#14100a}
+#outw,#outh{width:60px;font:inherit;padding:2px 4px}
 </style>
 </head>
 <body>
@@ -42,7 +42,7 @@ a{color:#14100a}
 <canvas id="src"></canvas>
 <canvas id="prev" width="480" height="600"></canvas>
 </div>
-<div id="pastebox" style="display:none;position:fixed;top:18%;left:50%;transform:translateX(-50%);background:#efe9d8;border:1px solid #14100a;padding:14px;z-index:9;width:340px;box-shadow:4px 4px 0 rgba(0,0,0,.25)">
+<div id="pastebox" style="display:none;position:fixed;top:18%;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--ink);padding:14px;z-index:9;width:340px;box-shadow:4px 4px 0 var(--shadow)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>paste quad</b><button id="pbClose">× close</button></div>
   <textarea id="pbText" style="width:100%;height:90px;font:inherit;box-sizing:border-box" placeholder="[[882,839],[2048,1049],[2990,3815],[60,3845]]"></textarea>
   <button id="pbGo" style="margin-top:8px">submit</button>
@@ -52,6 +52,7 @@ a{color:#14100a}
 const K=0.6, FW=1800, FH=2400;
 const DEF=[[882,839],[2048,1049],[2990,3815],[60,3845]]; // TL TR BR BL, full-res
 const NAMES=['TL','TR','BR','BL'];
+const CV_=n=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
 const img=new Image();
 let quad=DEF.map(p=>p.slice()), cur=0, data=null;
 const sc=document.getElementById('src'),sctx=sc.getContext('2d');
@@ -74,10 +75,10 @@ function draw(){
   sctx.drawImage(img,0,0,FW,FH,0,0,sc.width,sc.height);
   sctx.beginPath();
   quad.forEach((p,i)=>{const[a,b]=fit(p);i?sctx.lineTo(a,b):sctx.moveTo(a,b);});
-  sctx.closePath();sctx.strokeStyle='#c0392b';sctx.lineWidth=2;sctx.stroke();
+  sctx.closePath();sctx.strokeStyle=CV_('danger');sctx.lineWidth=2;sctx.stroke();
   quad.forEach((p,i)=>{const[a,b]=fit(p);
-    sctx.fillStyle=i===cur?'#b00':'#fff';sctx.fillRect(a-5,b-5,10,10);
-    sctx.fillStyle='#000';sctx.font='11px monospace';sctx.fillText(NAMES[i],a+8,b+4);});
+    sctx.fillStyle=i===cur?CV_('danger'):CV_('panel2');sctx.fillRect(a-5,b-5,10,10);
+    sctx.fillStyle=CV_('ink');sctx.font='11px monospace';sctx.fillText(NAMES[i],a+8,b+4);});
 }
 const ptsEl=document.getElementById('pts');
 function rows(){
@@ -176,6 +177,7 @@ document.getElementById('pbGo').onclick=()=>{
     quad=[[nums[0],nums[1]],[nums[2],nums[3]],[nums[4],nums[5]],[nums[6],nums[7]]];
     draw();rows();preview();pb.style.display='none';}
   else alert('need 8 numbers (TL,TR,BR,BL)');};
+addEventListener('du:theme',draw);
 // arrow-key nudge uses shift for 10px steps; inputs also live-edit
 </script>
 </body>

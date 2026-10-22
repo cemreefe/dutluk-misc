@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Font editor</title>
 <link rel="icon" type="image/svg+xml" href="../anitkabir/logo.svg">
+<link rel="stylesheet" href="/shared/ui.css">
+<script src="/shared/ui.js"></script>
 <style>
-:root{--bg:#e8e2d0;--ink:#14100a;--line:#c8bfa4;--acc:#8a6d3b}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-monospace,Menlo,Consolas,monospace}
+body{margin:0;font:14px/1.4 ui-monospace,Menlo,Consolas,monospace}
 #app{display:flex;height:100vh;overflow:hidden}
 #side{width:200px;border-right:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
 #side h1{font-size:15px;margin:0 0 4px}
@@ -18,14 +19,14 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-monospace,M
 .gbtns button.dirty::after{content:'';position:absolute;top:1px;right:2px;width:4px;height:4px;background:var(--acc);border-radius:50%}
 #main{flex:1;display:flex;flex-direction:column;align-items:center;overflow:hidden}
 #prev{width:300px;border-left:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
-#pvtext{font:inherit;padding:6px 8px;border:1px solid var(--line);background:#f4f0e2;color:var(--ink)}
-#pvcv{border:1px solid var(--line);background:#efe9d8;width:100%}
+#pvtext{font:inherit;padding:6px 8px}
+#pvcv{width:100%}
 #bar{display:flex;gap:6px;padding:8px;flex-wrap:wrap;justify-content:center}
 #bar button,#bar label.btn{padding:5px 10px;background:none;border:1px solid var(--ink);cursor:pointer;font:inherit;color:var(--ink)}
 #bar button:hover{background:var(--ink);color:var(--bg)}
-canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:crosshair}
+canvas{touch-action:none;cursor:crosshair}
 #hint{padding:4px;font-size:12px;opacity:.75;text-align:center}
-#out{width:96%;height:110px;margin:8px;display:none;font:11px ui-monospace,monospace}
+#out{width:96%;height:110px;margin:8px;display:none;font:11px ui-monospace,monospace;background:var(--panel2)}
 .k{font-size:11px;opacity:.8}
 .ctbar{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .ctbar button{padding:2px 8px;font:inherit;border:1px solid var(--line);background:none;cursor:pointer;color:var(--ink)}
@@ -68,7 +69,6 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
     <button id="bFit">fit view</button>
     <button id="bExport">export</button>
     <label class="btn">open .json<input id="fopen" type="file" accept=".json,.js" hidden></label>
-    <a href="warp/" style="align-self:center">warp →</a>
   </div>
   <canvas id="cv" width="620" height="780"></canvas>
   <div id="bar2">
@@ -94,6 +94,7 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
 </div>
 <script>
 'use strict';
+const CV_=n=>getComputedStyle(document.documentElement).getPropertyValue('--'+n).trim();
 const CV=document.getElementById('cv'),ctx=CV.getContext('2d');
 // ---------- view ----------
 let view={x0:-60,x1:760,y0:-160,y1:820};
@@ -236,10 +237,10 @@ function draw(){
     ctx.globalAlpha=+document.getElementById('uop').value;
     ctx.drawImage(imgs[g],cx,cy,imgs[g].width*usc2,imgs[g].height*usc2);
     ctx.globalAlpha=1;lastUsc=usc;}
-  ctx.strokeStyle='#b7ab86';ctx.lineWidth=1;
+  ctx.strokeStyle=CV_('line');ctx.lineWidth=1;
   [0,700,-150].forEach(y=>{ctx.beginPath();ctx.moveTo(0,P(0,y)[1]);ctx.lineTo(CV.width,P(0,y)[1]);ctx.stroke();});
   const gd=DATA.glyphs[g]||[0,700,0];
-  ctx.strokeStyle='#c96';
+  ctx.strokeStyle=CV_('acc');
   [gd[2],gd[1]-gd[2]].forEach(x=>{ctx.beginPath();ctx.moveTo(P(x,0)[0],0);ctx.lineTo(P(x,0)[0],CV.height);ctx.stroke();});
   // curves
   (edits[g]||[]).forEach((c,ci)=>{
@@ -251,7 +252,7 @@ function draw(){
         ctx.bezierCurveTo(h1[0],h1[1],h2[0],h2[1],a1,b1);}
       else ctx.lineTo(a1,b1);});
     ctx.closePath();
-    ctx.strokeStyle=ci===selC?'#8a6d3b':'#555';ctx.lineWidth=1.5;ctx.stroke();});
+    ctx.strokeStyle=ci===selC?CV_('acc'):CV_('ink2');ctx.lineWidth=1.5;ctx.stroke();});
   ctx.beginPath();
   (edits[g]||[]).forEach(c=>{
     c.forEach((n,j)=>{const b=c[(j+1)%c.length];
@@ -261,23 +262,23 @@ function draw(){
         ctx.bezierCurveTo(h1[0],h1[1],h2[0],h2[1],a1,b1);}
       else ctx.lineTo(a1,b1);});
     ctx.closePath();});
-  ctx.fillStyle='rgba(20,16,10,.13)';ctx.fill('evenodd');
+  ctx.fillStyle=CV_('fill');ctx.fill('evenodd');
   // handles (active contour + contours containing selected nodes)
   (edits[g]||[]).forEach((c,ci)=>{const show=ci===selC||c.some((n,ni)=>sel.has(key(ci,ni)));
     if(!show)return;
     c.forEach((n,ni)=>{[['o',n.o],['i',n.i]].forEach(([w,h])=>{if(!h)return;
       const[a,b]=P(n.x,n.y),[hx,hy]=P(n.x+h[0],n.y+h[1]);
-      ctx.strokeStyle='rgba(138,109,59,.6)';ctx.lineWidth=1;
+      ctx.strokeStyle=CV_('accf');ctx.lineWidth=1;
       ctx.beginPath();ctx.moveTo(a,b);ctx.lineTo(hx,hy);ctx.stroke();
-      ctx.fillStyle=sel.has(key(ci,ni))?'#b00':'#8a6d3b';
+      ctx.fillStyle=sel.has(key(ci,ni))?CV_('danger'):CV_('acc');
       ctx.beginPath();ctx.arc(hx,hy,3.5,0,7);ctx.fill();});});});
   // nodes
   (edits[g]||[]).forEach((c,ci)=>c.forEach((n,ni)=>{const[a,b]=P(n.x,n.y);
     const seld=sel.has(key(ci,ni));
-    ctx.fillStyle=seld?'#b00':(n.o||n.i?'#8a6d3b':'#14100a');
+    ctx.fillStyle=seld?CV_('danger'):(n.o||n.i?CV_('acc'):CV_('ink'));
     if(n.o&&n.i){ctx.beginPath();ctx.arc(a,b,seld?4.5:3.5,0,7);ctx.fill();}
     else ctx.fillRect(a-3.5,b-3.5,7,7);}));
-  if(box){ctx.strokeStyle='#8a6d3b';ctx.setLineDash([4,3]);
+  if(box){ctx.strokeStyle=CV_('acc');ctx.setLineDash([4,3]);
     ctx.strokeRect(Math.min(box[0],box[2]),Math.min(box[1],box[3]),Math.abs(box[2]-box[0]),Math.abs(box[3]-box[1]));
     ctx.setLineDash([]);}
   drawPreview();
@@ -288,7 +289,7 @@ const pvtext=document.getElementById('pvtext');
 function drawPreview(){
   const size=42,sc=size/1000,ls=56;
   pvctx.clearRect(0,0,pvcv.width,pvcv.height);
-  pvctx.fillStyle='#14100a';
+  pvctx.fillStyle=CV_('ink');
   let x=8,y=ls;
   for(const ch of pvtext.value){
     let k=edits[ch]?ch:(edits[ch.toUpperCase()]?ch.toUpperCase():' ');
@@ -509,6 +510,7 @@ function delSel(){if(!sel.size)return;snap();
   if(selC>=edits[g].length)selC=edits[g].length-1;
   sel.clear();markDirty();sync();draw();}
 document.getElementById('bDel').onclick=delSel;
+addEventListener('du:theme',()=>{draw();drawPreview();});
 // right panel resizer
 const split=document.getElementById('split'),prevEl=document.getElementById('prev');
 try{const w=localStorage.getItem('fe_pw');if(w)prevEl.style.width=w+'px';}catch(e){}
