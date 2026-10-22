@@ -37,6 +37,11 @@ canvas{touch-action:none;cursor:crosshair}
 #bar2 button{padding:3px 8px;background:none;border:1px solid var(--line);cursor:pointer;font:inherit;color:var(--ink)}
 #bar2 button:hover{background:var(--ink);color:var(--bg)}
 #bar2 .sep{opacity:.5;padding:0 3px}
+#autobox{display:none;position:fixed;right:12px;bottom:60px;width:250px;background:var(--bg);border:1px solid var(--line);padding:8px;z-index:50;font-size:12px;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+#autobox canvas{width:100%;border:1px solid var(--line);display:block;margin:4px 0;image-rendering:pixelated}
+#autobox .arow{display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap}
+#autobox input[type=range]{width:110px}
+#autobox button{padding:2px 8px;font:inherit}
 </style>
 </head>
 <body>
@@ -53,7 +58,7 @@ canvas{touch-action:none;cursor:crosshair}
   <div class="gbtns" id="gbtns"></div>
   <div class="ctbar" id="ctbar"></div>
   <label style="font-size:12px"><input type="checkbox" id="underlay" checked> photo underlay</label>
-  <div style="display:flex;gap:4px"><label class="btn" style="font-size:12px">photo&#8230;<input id="fphoto" type="file" accept="image/*" hidden></label><button id="bNoPhoto" title="remove photo for this glyph" style="font-size:12px">&#215;photo</button></div>
+  <div style="display:flex;gap:4px"><label class="btn" style="font-size:12px">photo&#8230;<input id="fphoto" type="file" accept="image/*" hidden></label><button id="bNoPhoto" title="remove photo for this glyph" style="font-size:12px">&#215;photo</button><button id="bAuto" title="auto-detect letter in photo" style="font-size:12px">auto&#9737;</button></div>
   <label style="font-size:12px"><input type="range" id="uop" min="0" max="1" step="0.05" value="0.55"></label>
   <div style="font-size:12px;margin-top:8px">metrics<br>bearing <input id="inb" type="number" style="width:60px;font:inherit"> adv <input id="ina" type="number" style="width:60px;font:inherit"></div>
 </div>
@@ -86,6 +91,16 @@ canvas{touch-action:none;cursor:crosshair}
   </div>
   <div id="hint"></div>
   <textarea id="out"></textarea>
+</div>
+<div id="autobox">
+  <div class="arow"><b>auto-fit</b><span style="flex:1"></span><button id="autoX">&#215;</button></div>
+  <canvas id="autoCv" width="220" height="160"></canvas>
+  <div class="arow"><select id="aMode" style="font:inherit"><option value="thr">threshold</option><option value="edge">edges</option></select>
+    <label><input type="checkbox" id="aInv"> invert</label></div>
+  <div class="arow">level <input id="aThr" type="range" min="0" max="255" value="140"></div>
+  <div class="arow">min size <input id="aMin" type="range" min="0" max="0.05" step="0.001" value="0.004"></div>
+  <div class="arow"><button id="aPrev">&#8249;</button><span id="aNum">-/-</span><button id="aNext">&#8250;</button>
+    <span style="flex:1"></span><button id="aReset">reset</button><button id="aApply">use this</button></div>
 </div>
 <div id="split"></div>
 <div id="prev">
@@ -204,7 +219,7 @@ function restore(){try{const st=JSON.parse(localStorage.getItem(LS+setsel.value)
 const gb=document.getElementById('gbtns'),ctb=document.getElementById('ctbar');
 function buildGlyphs(){gb.innerHTML='';
   for(const k of Object.keys(DATA.glyphs)){const b=document.createElement('button');b.textContent=k;
-    b.onclick=()=>{g=k;selC=0;sel.clear();hist.u=[];hist.r=[];sync();draw();};
+    b.onclick=()=>{g=k;selC=0;sel.clear();hist.u=[];hist.r=[];AB.style.display='none';sync();draw();};
     b.dataset.g=k;if(dirty[k])b.classList.add('dirty');gb.appendChild(b);}
   sync();}
 function buildCt(){ctb.innerHTML='';
@@ -573,7 +588,62 @@ document.getElementById('fopen').onchange=e=>{
       for(const k in j.__meta.underlayScales)
         if(DATA.meta[k])DATA.meta[k].sc=j.__meta.underlayScales[k];
     markDirty();
-    g=Object.keys(src).find(k=>k!=='__meta'&&edits[k])||g;selC=0;sel.clear();sync();draw();});};
+    g=Object.keys(src).find(k=>k!=='__meta'&&edits[k])||g;selC=0;sel.clear();AB.style.display='none';sync();draw();});};
+// ---------- auto-fit underlay ----------
+let aCands=[],aIdx=0,aPix=null,aBin=null,aW=0,aH=0,aBase=null;
+const AB=document.getElementById('autobox');
+function autoOpen(){const im=imgs[g];if(!im){document.getElementById('hint').textContent='no photo — paste or pick one first';return;}
+  AB.style.display='block';
+  const s=220/im.naturalWidth;aW=220;aH=Math.round(im.naturalHeight*s);
+  const oc=document.createElement('canvas');oc.width=aW;oc.height=aH;
+  const octx=oc.getContext('2d');octx.drawImage(im,0,0,aW,aH);
+  const d=octx.getImageData(0,0,aW,aH).data;
+  aPix=new Uint8Array(aW*aH);
+  for(let i=0;i<aW*aH;i++)aPix[i]=(d[i*4]*299+d[i*4+1]*587+d[i*4+2]*114)/1000|0;
+  aBase=DATA.meta[g]?{...DATA.meta[g],off:DATA.meta[g].off?DATA.meta[g].off.slice():undefined}:null;
+  runDetect();}
+function runDetect(){if(!aPix)return;
+  const mode=document.getElementById('aMode').value,thr=+document.getElementById('aThr').value,
+        inv=document.getElementById('aInv').checked,minA=+document.getElementById('aMin').value*aW*aH;
+  aBin=new Uint8Array(aW*aH);
+  if(mode==='thr'){for(let i=0;i<aW*aH;i++)aBin[i]=(inv?aPix[i]>thr:aPix[i]<thr)?1:0;}
+  else{for(let y=1;y<aH-1;y++)for(let x=1;x<aW-1;x++){const i=y*aW+x;
+    const gx=aPix[i+1]-aPix[i-1]+2*aPix[i+aW+1]-2*aPix[i+aW-1]+aPix[i+2*aW+1]-aPix[i+2*aW-1];
+    const gy=aPix[i+aW]-aPix[i-aW]+2*aPix[i+aW+1]-2*aPix[i-aW+1]+aPix[i+aW-1]-aPix[i-aW-1];
+    if(gx*gx+gy*gy>thr*thr*4)aBin[i]=1;}}
+  const seen=new Int32Array(aW*aH).fill(-1),stack=[];aCands=[];
+  for(let i=0;i<aW*aH;i++){if(!aBin[i]||seen[i]>=0)continue;
+    let x0=aW,x1=0,y0=aH,y1=0,area=0;stack.length=0;stack.push(i);seen[i]=1;
+    while(stack.length){const p=stack.pop(),x=p%aW,y=p/aW|0;area++;
+      if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+      if(x>0&&aBin[p-1]&&seen[p-1]<0){seen[p-1]=1;stack.push(p-1);}
+      if(x<aW-1&&aBin[p+1]&&seen[p+1]<0){seen[p+1]=1;stack.push(p+1);}
+      if(y>0&&aBin[p-aW]&&seen[p-aW]<0){seen[p-aW]=1;stack.push(p-aW);}
+      if(y<aH-1&&aBin[p+aW]&&seen[p+aW]<0){seen[p+aW]=1;stack.push(p+aW);}}
+    if(area>=minA)aCands.push({x0,y0,x1:x1+1,y1:y1+1,area});}
+  aCands.sort((a,b)=>b.area-a.area);aCands=aCands.slice(0,40);aIdx=0;autoShow();}
+function autoShow(){const c=document.getElementById('autoCv');c.width=aW;c.height=aH;
+  const x=c.getContext('2d'),id=x.createImageData(aW,aH);
+  const dark=matchMedia('(prefers-color-scheme: dark)').matches||document.documentElement.dataset.theme==='dark';
+  for(let i=0;i<aW*aH;i++){const v=aBin[i]?(dark?255:20):(dark?40:250);
+    id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=v;id.data[i*4+3]=255;}
+  x.putImageData(id,0,0);
+  x.strokeStyle='#ff8800';aCands.forEach((b,i)=>{if(i===aIdx)return;
+    x.globalAlpha=.35;x.lineWidth=1;x.strokeRect(b.x0+.5,b.y0+.5,b.x1-b.x0-1,b.y1-b.y0-1);});
+  x.globalAlpha=1;
+  const b=aCands[aIdx];
+  if(b){x.lineWidth=2;x.strokeRect(b.x0+.5,b.y0+.5,b.x1-b.x0-1,b.y1-b.y0-1);
+    const s=imgs[g].naturalWidth/aW;
+    DATA.meta[g]={x0:b.x0*s,y0:b.y0*s,x1:b.x1*s,y1:b.y1*s,off:[0,0],sc:1};autosave();draw();}
+  document.getElementById('aNum').textContent=`${aCands.length?aIdx+1:0}/${aCands.length}`;}
+document.getElementById('bAuto').onclick=autoOpen;
+document.getElementById('autoX').onclick=()=>{AB.style.display='none';};
+document.getElementById('aPrev').onclick=()=>{if(aCands.length){aIdx=(aIdx-1+aCands.length)%aCands.length;autoShow();}};
+document.getElementById('aNext').onclick=()=>{if(aCands.length){aIdx=(aIdx+1)%aCands.length;autoShow();}};
+document.getElementById('aApply').onclick=()=>{AB.style.display='none';};
+document.getElementById('aReset').onclick=()=>{if(aBase)DATA.meta[g]=aBase;aBase=null;AB.style.display='none';autosave();draw();};
+['aMode','aThr','aInv','aMin'].forEach(id=>document.getElementById(id).oninput=runDetect);
+
 const FONTS=['default','anitkabir'];
 const setsel=document.getElementById('setsel');
 FONTS.forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;setsel.appendChild(o);});
