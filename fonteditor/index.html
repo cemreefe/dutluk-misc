@@ -297,11 +297,19 @@ function loadImgFile(f){const fr=new FileReader();fr.onload=()=>{
     c.getContext('2d').drawImage(t,0,0,w,h);
     setUnderlay(c.toDataURL('image/jpeg',0.85),w,h);};
   t.src=fr.result;};fr.readAsDataURL(f);}
-function copyCont(){const c=(edits[g]||[])[selC];if(!c||!c.length)return;
-  clipCont=deep(c);document.getElementById('hint').textContent=`contour ${selC+1} copied (${c.length} nodes)`;}
-function pasteCont(){if(!clipCont)return;if(!edits[g])edits[g]=[];
-  snap();edits[g].push(deep(clipCont));selC=edits[g].length-1;
-  sel=new Set(edits[g][selC].map((n,ni)=>key(selC,ni)));markDirty();buildCt();sync();draw();}
+function copyCont(){const cs=edits[g]||[];
+  if(sel.size){clipCont=[];
+    cs.forEach((c,ci)=>{const sub=c.filter((n,ni)=>sel.has(key(ci,ni))).map(n=>deep(n));
+      if(sub.length)clipCont.push(sub);});
+    document.getElementById('hint').textContent=`${sel.size} node(s) copied`;return;}
+  const c=cs[selC];if(!c||!c.length)return;
+  clipCont=[deep(c)];document.getElementById('hint').textContent=`contour ${selC+1} copied (${c.length} nodes)`;}
+function pasteCont(){if(!clipCont||!clipCont.length)return;if(!edits[g])edits[g]=[];
+  snap();const start=edits[g].length;
+  clipCont.forEach(cc=>edits[g].push(deep(cc)));
+  selC=edits[g].length-1;sel=new Set();
+  edits[g].slice(start).forEach((c,off)=>c.forEach((n,ni)=>sel.add(key(start+off,ni))));
+  markDirty();buildCt();sync();draw();}
 function init(){for(const k in edits)delete edits[k];
   for(const[k,d]of Object.entries(DATA.glyphs))edits[k]=toModel(d[0]);
   for(const k in dirty)delete dirty[k];
@@ -458,13 +466,14 @@ CV.addEventListener('mousedown',e=>{
   if(e.button===1||spaceDown){vpan=[e.clientX,e.clientY,view.x0,view.y0,view.x1-view.x0,view.y1-view.y0];e.preventDefault();return;}
   if(e.altKey&&imgs[g]&&document.getElementById('underlay').checked){pan=[e.clientX,e.clientY];return;}
   const hh=pickHandle(e);
-  if(hh){snap();const[ci,ni,w]=hh;sel=new Set([key(ci,ni)]);drag={t:'h',ci,ni,w,sym:!e.shiftKey};return;}
+  if(hh){snap();const[ci,ni,w]=hh;selC=ci;sel=new Set([key(ci,ni)]);drag={t:'h',ci,ni,w,sym:!e.shiftKey};return;}
   const hit=pickNode(e);
   if(hit){
     const k=key(...hit);
     if(e.altKey){snap();toggleSmooth(...hit);markDirty();sync();draw();return;}
-    if(e.shiftKey){sel.has(k)?sel.delete(k):sel.add(k);sync();draw();return;}
+    if(e.shiftKey){sel.has(k)?sel.delete(k):sel.add(k);selC=hit[0];sync();draw();return;}
     if(!sel.has(k))sel=new Set([k]);
+    selC=hit[0];
     snap();drag={t:'n'};sync();draw();return;}
   if(e.ctrlKey||e.metaKey){ // insert on segment
     const s=segNear(fx,fy);
@@ -520,7 +529,7 @@ addEventListener('mouseup',e=>{
     if(!e.shiftKey)sel.clear();
     (edits[g]||[]).forEach((c,ci)=>c.forEach((n,ni)=>{
       const[a,b]=P(n.x,n.y);
-      if(a>=x0&&a<=x1&&b>=y0&&b<=y1)sel.add(key(ci,ni));}));
+      if(a>=x0&&a<=x1&&b>=y0&&b<=y1){sel.add(key(ci,ni));selC=ci;}}));
     box=null;drag=null;sync();draw();return;}
   if(drag&&drag.t==='pen')sel=new Set([key(selC,drag.idx)]);
   if(drag&&drag.t==='maybe'&&tool==='select'){sel.clear();}
