@@ -30,6 +30,12 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
 .ctbar{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .ctbar button{padding:2px 8px;font:inherit;border:1px solid var(--line);background:none;cursor:pointer;color:var(--ink)}
 .ctbar button.on{background:var(--ink);color:var(--bg)}
+#split{width:6px;cursor:col-resize;background:var(--line);flex:none}
+#split:hover{background:var(--acc)}
+#bar2{display:flex;gap:4px;padding:6px;flex-wrap:wrap;justify-content:center;align-items:center;font-size:12px}
+#bar2 button{padding:3px 8px;background:none;border:1px solid var(--line);cursor:pointer;font:inherit;color:var(--ink)}
+#bar2 button:hover{background:var(--ink);color:var(--bg)}
+#bar2 .sep{opacity:.5;padding:0 3px}
 </style>
 </head>
 <body>
@@ -42,7 +48,7 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
   drag handle: shape &middot; shift+drag: break symmetry<br>
   dbl-click node: corner⇄smooth &middot; ctrl+click segment: insert<br>
   wheel: zoom &middot; space/middle-drag: pan &middot; alt+drag photo: pan it<br>
-  arrows: nudge &middot; del &middot; ctrl+z/y: undo/redo &middot; a: select all</div>
+  everything else: buttons under the canvas</div>
   <div class="gbtns" id="gbtns"></div>
   <div class="ctbar" id="ctbar"></div>
   <label style="font-size:12px"><input type="checkbox" id="underlay" checked> photo underlay</label>
@@ -65,9 +71,22 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
     <a href="warp/" style="align-self:center">warp →</a>
   </div>
   <canvas id="cv" width="620" height="780"></canvas>
+  <div id="bar2">
+    <button id="zOut" title="zoom out">zoom -</button><button id="zIn" title="zoom in">zoom +</button>
+    <span class="sep">|</span><span>move</span>
+    <button id="nL">&#8592;</button><button id="nU">&#8593;</button><button id="nD">&#8595;</button><button id="nR">&#8594;</button>
+    <span class="sep">|</span><span>photo</span>
+    <button id="pL">&#8592;</button><button id="pU">&#8593;</button><button id="pD">&#8595;</button><button id="pR">&#8594;</button>
+    <button id="pOut" title="shrink photo">-</button><button id="pIn" title="enlarge photo">+</button>
+    <span class="sep">|</span>
+    <button id="bAll">sel all</button>
+    <button id="bSmooth">corner&#8646;smooth</button>
+    <button id="bDel">del node</button>
+  </div>
   <div id="hint"></div>
   <textarea id="out"></textarea>
 </div>
+<div id="split"></div>
 <div id="prev">
   <input id="pvtext" value="HAMBURGEFONSTIV 012" autocomplete="off" spellcheck="false">
   <canvas id="pvcv" width="280" height="420"></canvas>
@@ -164,12 +183,15 @@ let saveT=null;
 function autosave(){clearTimeout(saveT);saveT=setTimeout(()=>{
   const st={edits,metrics:{},uoff:{}};
   for(const k in DATA.glyphs)st.metrics[k]=[DATA.glyphs[k][1],DATA.glyphs[k][2]||0];
-  for(const k in DATA.meta)if(DATA.meta[k].off)st.uoff[k]=DATA.meta[k].off;
+  for(const k in DATA.meta){const m=DATA.meta[k];
+    if(m.off||m.sc)st.uoff[k]={off:m.off,sc:m.sc};}
   try{localStorage.setItem(LS+setsel.value,JSON.stringify(st));}catch(e){}},300);}
 function restore(){try{const st=JSON.parse(localStorage.getItem(LS+setsel.value));if(!st)return false;
   for(const k in st.edits)edits[k]=st.edits[k];
   for(const k in st.metrics||{})if(DATA.glyphs[k]){DATA.glyphs[k][1]=st.metrics[k][0];DATA.glyphs[k][2]=st.metrics[k][1];}
-  for(const k in st.uoff||{})if(DATA.meta[k])DATA.meta[k].off=st.uoff[k];
+  for(const k in st.uoff||{})if(DATA.meta[k]){const u=st.uoff[k];
+    if(Array.isArray(u))DATA.meta[k].off=u;
+    else{DATA.meta[k].off=u.off;DATA.meta[k].sc=u.sc;}}
   return true;}catch(e){return false;}}
 
 // ---------- glyph grid / contours ----------
@@ -207,12 +229,12 @@ function draw(){
   const m=DATA.meta[g];
   if(m&&imgs[g]&&document.getElementById('underlay').checked){
     const ih=m.y1-m.y0,usc=S()*700/ih,[bx,by]=P(0,0);
-    const uoff=m.off||[0,0];
+    const uoff=m.off||[0,0],usc2=usc*(m.sc||1);
     const gcen=((DATA.glyphs[g]||[0,560])[1]||560)/2;
-    const cx=bx+gcen*S()-(m.x0+m.x1)*usc/2+uoff[0]*usc;
-    const cy=by-m.y1*usc+uoff[1]*usc;
+    const cx=bx+gcen*S()-(m.x0+m.x1)*usc2/2+uoff[0]*usc;
+    const cy=by-m.y1*usc2+uoff[1]*usc;
     ctx.globalAlpha=+document.getElementById('uop').value;
-    ctx.drawImage(imgs[g],cx,cy,imgs[g].width*usc,imgs[g].height*usc);
+    ctx.drawImage(imgs[g],cx,cy,imgs[g].width*usc2,imgs[g].height*usc2);
     ctx.globalAlpha=1;lastUsc=usc;}
   ctx.strokeStyle='#b7ab86';ctx.lineWidth=1;
   [0,700,-150].forEach(y=>{ctx.beginPath();ctx.moveTo(0,P(0,y)[1]);ctx.lineTo(CV.width,P(0,y)[1]);ctx.stroke();});
@@ -413,14 +435,7 @@ addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
   if((e.ctrlKey||e.metaKey)&&e.key==='y'){e.preventDefault();redo();return;}
   if(e.key==='a'||e.key==='A'){sel=allNodes();sync();draw();return;}
-  if(e.key==='Delete'||e.key==='Backspace'){
-    if(!sel.size)return;snap();
-    (edits[g]||[]).forEach((c,ci)=>{const idxs=new Set();
-      sel.forEach(k=>{const[a,b]=k.split(':').map(Number);if(a===ci)idxs.add(b);});
-      const keep=c.filter((n,ni)=>!idxs.has(ni));edits[g][ci]=keep;});
-    edits[g]=edits[g].filter(c=>c.length);
-    if(selC>=edits[g].length)selC=edits[g].length-1;
-    sel.clear();markDirty();sync();draw();return;}
+  if(e.key==='Delete'||e.key==='Backspace'){delSel();return;}
   const ar={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]}[e.key];
   if(!ar)return;e.preventDefault();
   const st=e.shiftKey?10:1;
@@ -449,8 +464,9 @@ document.getElementById('bFit').onclick=fit;
 document.getElementById('underlay').onchange=draw;
 document.getElementById('uop').oninput=draw;
 document.getElementById('bExport').onclick=()=>{
-  const out={__meta:{underlayOffsets:{}}};
-  for(const k in DATA.meta)if(DATA.meta[k].off)out.__meta.underlayOffsets[k]=DATA.meta[k].off;
+  const out={__meta:{underlayOffsets:{},underlayScales:{}}};
+  for(const k in DATA.meta){if(DATA.meta[k].off)out.__meta.underlayOffsets[k]=DATA.meta[k].off;
+    if(DATA.meta[k].sc&&DATA.meta[k].sc!==1)out.__meta.underlayScales[k]=DATA.meta[k].sc;}
   for(const[k,v]of Object.entries(edits)){
     const gd=DATA.glyphs[k]||[0,700,0];
     out[k]={advance:gd[1],bearing:gd[2]||0,contours:fixWinding(v).map(toCmds).flat()};}
@@ -458,6 +474,50 @@ document.getElementById('bExport').onclick=()=>{
   t.value=JSON.stringify(out);
   const a=document.createElement('a');a.href='data:application/json,'+encodeURIComponent(t.value);
   a.download='traced-glyphs.json';a.click();};
+// canvas-side controls (mirrors of keyboard shortcuts)
+function zoomView(z){const c=F(CV.width/2,CV.height/2);
+  view={x0:c[0]-(c[0]-view.x0)*z,x1:c[0]+(view.x1-c[0])*z,y0:c[1]-(c[1]-view.y0)*z,y1:c[1]+(view.y1-c[1])*z};draw();}
+document.getElementById('zIn').onclick=()=>zoomView(1/1.2);
+document.getElementById('zOut').onclick=()=>zoomView(1.2);
+function nudgeNodes(dx,dy){snap();const target=sel.size?sel:allNodes();
+  (edits[g]||[]).forEach((c,ci)=>c.forEach((n,ni)=>{
+    if(target.has(key(ci,ni))){n.x+=dx;n.y+=dy;}}));
+  markDirty();draw();}
+document.getElementById('nL').onclick=()=>nudgeNodes(-1,0);
+document.getElementById('nR').onclick=()=>nudgeNodes(1,0);
+document.getElementById('nU').onclick=()=>nudgeNodes(0,1);
+document.getElementById('nD').onclick=()=>nudgeNodes(0,-1);
+function nudgePhoto(dx,dy){const m=DATA.meta[g];if(!m)return;
+  if(!m.off)m.off=[0,0];m.off[0]+=dx;m.off[1]+=dy;autosave();draw();}
+document.getElementById('pL').onclick=()=>nudgePhoto(-1,0);
+document.getElementById('pR').onclick=()=>nudgePhoto(1,0);
+document.getElementById('pU').onclick=()=>nudgePhoto(0,-1);
+document.getElementById('pD').onclick=()=>nudgePhoto(0,1);
+function scalePhoto(f){const m=DATA.meta[g];if(!m)return;
+  m.sc=(m.sc||1)*f;autosave();draw();}
+document.getElementById('pIn').onclick=()=>scalePhoto(1.15);
+document.getElementById('pOut').onclick=()=>scalePhoto(1/1.15);
+document.getElementById('bAll').onclick=()=>{sel=allNodes();sync();draw();};
+document.getElementById('bSmooth').onclick=()=>{if(!sel.size)return;snap();
+  sel.forEach(k=>{const[ci,ni]=k.split(':').map(Number);toggleSmooth(ci,ni);});
+  markDirty();sync();draw();};
+function delSel(){if(!sel.size)return;snap();
+  (edits[g]||[]).forEach((c,ci)=>{const idxs=new Set();
+    sel.forEach(k=>{const[a,b]=k.split(':').map(Number);if(a===ci)idxs.add(b);});
+    edits[g][ci]=c.filter((n,ni)=>!idxs.has(ni));});
+  edits[g]=edits[g].filter(c=>c.length);
+  if(selC>=edits[g].length)selC=edits[g].length-1;
+  sel.clear();markDirty();sync();draw();}
+document.getElementById('bDel').onclick=delSel;
+// right panel resizer
+const split=document.getElementById('split'),prevEl=document.getElementById('prev');
+try{const w=localStorage.getItem('fe_pw');if(w)prevEl.style.width=w+'px';}catch(e){}
+split.addEventListener('mousedown',e=>{e.preventDefault();
+  const mv=ev=>{const w=Math.max(120,Math.min(700,innerWidth-ev.clientX));
+    prevEl.style.width=w+'px';pvcv.width=Math.max(120,w-22);drawPreview();};
+  const up=()=>{removeEventListener('mousemove',mv);removeEventListener('mouseup',up);
+    try{localStorage.setItem('fe_pw',parseInt(prevEl.style.width)||prevEl.offsetWidth);}catch(e){}};
+  addEventListener('mousemove',mv);addEventListener('mouseup',up);});
 document.getElementById('fopen').onchange=e=>{
   const f=e.target.files[0];if(!f)return;
   f.text().then(txt=>{
@@ -471,6 +531,9 @@ document.getElementById('fopen').onchange=e=>{
     if(j.__meta&&j.__meta.underlayOffsets)
       for(const k in j.__meta.underlayOffsets)
         if(DATA.meta[k])DATA.meta[k].off=j.__meta.underlayOffsets[k];
+    if(j.__meta&&j.__meta.underlayScales)
+      for(const k in j.__meta.underlayScales)
+        if(DATA.meta[k])DATA.meta[k].sc=j.__meta.underlayScales[k];
     markDirty();
     g=Object.keys(src).find(k=>k!=='__meta'&&edits[k])||g;selC=0;sel.clear();sync();draw();});};
 const FONTS=['default','anitkabir'];
