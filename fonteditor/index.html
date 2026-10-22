@@ -75,10 +75,10 @@ canvas{touch-action:none;cursor:crosshair}
   <div id="bar2">
     <button id="zOut" title="zoom out">zoom -</button><button id="zIn" title="zoom in">zoom +</button>
     <span class="sep">|</span><span>move</span>
-    <button id="nL">&#8592;</button><button id="nU">&#8593;</button><button id="nD">&#8595;</button><button id="nR">&#8594;</button>
+    <button id="nL" title="shift = ×10">&#8592;</button><button id="nU">&#8593;</button><button id="nD">&#8595;</button><button id="nR">&#8594;</button>
     <span class="sep">|</span><span>photo</span>
-    <button id="pL">&#8592;</button><button id="pU">&#8593;</button><button id="pD">&#8595;</button><button id="pR">&#8594;</button>
-    <button id="pOut" title="shrink photo">-</button><button id="pIn" title="enlarge photo">+</button>
+    <button id="pL" title="shift = ×10">&#8592;</button><button id="pU">&#8593;</button><button id="pD">&#8595;</button><button id="pR">&#8594;</button>
+    <button id="pOut" title="shrink photo (shift = faster)">-</button><button id="pIn" title="enlarge photo (shift = faster)">+</button>
     <span class="sep">|</span>
     <button id="bAll">sel all</button>
     <button id="bSmooth">corner&#8646;smooth</button>
@@ -519,20 +519,21 @@ function nudgeNodes(dx,dy){snap();const target=sel.size?sel:allNodes();
   (edits[g]||[]).forEach((c,ci)=>c.forEach((n,ni)=>{
     if(target.has(key(ci,ni))){n.x+=dx;n.y+=dy;}}));
   markDirty();draw();}
-document.getElementById('nL').onclick=()=>nudgeNodes(-1,0);
-document.getElementById('nR').onclick=()=>nudgeNodes(1,0);
-document.getElementById('nU').onclick=()=>nudgeNodes(0,1);
-document.getElementById('nD').onclick=()=>nudgeNodes(0,-1);
+const stp=e=>e.shiftKey?10:1;
+document.getElementById('nL').onclick=e=>nudgeNodes(-stp(e),0);
+document.getElementById('nR').onclick=e=>nudgeNodes(stp(e),0);
+document.getElementById('nU').onclick=e=>nudgeNodes(0,stp(e));
+document.getElementById('nD').onclick=e=>nudgeNodes(0,-stp(e));
 function nudgePhoto(dx,dy){const m=DATA.meta[g];if(!m)return;
   if(!m.off)m.off=[0,0];m.off[0]+=dx;m.off[1]+=dy;autosave();draw();}
-document.getElementById('pL').onclick=()=>nudgePhoto(-1,0);
-document.getElementById('pR').onclick=()=>nudgePhoto(1,0);
-document.getElementById('pU').onclick=()=>nudgePhoto(0,-1);
-document.getElementById('pD').onclick=()=>nudgePhoto(0,1);
+document.getElementById('pL').onclick=e=>nudgePhoto(-stp(e),0);
+document.getElementById('pR').onclick=e=>nudgePhoto(stp(e),0);
+document.getElementById('pU').onclick=e=>nudgePhoto(0,-stp(e));
+document.getElementById('pD').onclick=e=>nudgePhoto(0,stp(e));
 function scalePhoto(f){const m=DATA.meta[g];if(!m)return;
   m.sc=(m.sc||1)*f;autosave();draw();}
-document.getElementById('pIn').onclick=()=>scalePhoto(1.15);
-document.getElementById('pOut').onclick=()=>scalePhoto(1/1.15);
+document.getElementById('pIn').onclick=e=>scalePhoto(e.shiftKey?1.5:1.15);
+document.getElementById('pOut').onclick=e=>scalePhoto(1/(e.shiftKey?1.5:1.15));
 document.getElementById('bAll').onclick=()=>{sel=allNodes();sync();draw();};
 document.getElementById('bSmooth').onclick=()=>{if(!sel.size)return;snap();
   sel.forEach(k=>{const[ci,ni]=k.split(':').map(Number);toggleSmooth(ci,ni);});
