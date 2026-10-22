@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warp — perspective deskew</title>
+<link rel="icon" type="image/svg+xml" href="../../anitkabir/logo.svg">
+<style>
+body{margin:0;background:#e8e2d0;color:#14100a;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+#app{display:flex;gap:14px;padding:12px;align-items:flex-start;flex-wrap:wrap}
+.panel{width:300px;display:flex;flex-direction:column;gap:8px}
+h1{font-size:15px;margin:0}
+.pts{display:grid;grid-template-columns:auto 1fr 1fr;gap:4px;align-items:center}
+.pts input{width:70px;font:inherit;padding:2px 4px;border:1px solid #c8bfa4;background:#f4f0e2}
+.pts b{cursor:pointer}
+.pts b.on{color:#b00}
+button{padding:6px 10px;background:none;border:1px solid #14100a;cursor:pointer;font:inherit;color:#14100a}
+button:hover{background:#14100a;color:#e8e2d0}
+canvas{border:1px solid #c8bfa4;background:#efe9d8}
+#src{touch-action:none;cursor:crosshair}
+.hint{font-size:11px;opacity:.75}
+#outw,#outh{width:60px;font:inherit;padding:2px 4px;border:1px solid #c8bfa4;background:#f4f0e2}
+a{color:#14100a}
+</style>
+</head>
+<body>
+<div id="app">
+<div class="panel">
+  <h1>Warp deskew</h1>
+  <div class="hint">drag the 4 corners onto the tablet frame · click a corner name then nudge with arrow keys · preview updates live</div>
+  <div class="pts" id="pts"></div>
+  <div>
+    out size <input id="outw" value="1600">×<input id="outh" value="2000">
+  </div>
+  <button id="bCopy">copy quad (full-res)</button>
+  <button id="bDl">download warped</button>
+  <button id="bReset">reset corners</button>
+  <div class="hint">send me the copied quad for a full-res re-warp, or use the download directly (it's from the 1800px copy)</div>
+  <div><a href="../">← font editor</a></div>
+</div>
+<canvas id="src"></canvas>
+<canvas id="prev" width="480" height="600"></canvas>
+</div>
+<script>
+// full photo is 3000x4000; bundled copy is 1800x2400 (K=0.6)
+const K=0.6, FW=1800, FH=2400;
+const DEF=[[882,839],[2048,1049],[2990,3815],[60,3845]]; // TL TR BR BL, full-res
+const NAMES=['TL','TR','BR','BL'];
+const img=new Image();
+let quad=DEF.map(p=>p.slice()), cur=0, data=null;
+const sc=document.getElementById('src'),sctx=sc.getContext('2d');
+const pc=document.getElementById('prev'),pctx=pc.getContext('2d');
+
+img.onload=()=>{
+  sc.width=620; sc.height=Math.round(FH*620/FW);
+  sctx.drawImage(img,0,0,FW,FH,0,0,sc.width,sc.height);
+  const t=document.createElement('canvas');t.width=FW;t.height=FH;
+  const tc=t.getContext('2d');tc.drawImage(img,0,0,FW,FH);
+  data=tc.getImageData(0,0,FW,FH);
+  draw();preview();
+};
+img.src='../photo.jpg';
+
+const fit=p=>[p[0]*K*sc.width/FW, p[1]*K*sc.height/FH]; // full-res→canvas
+const unfit=p=>[p[0]*FW/sc.width/K, p[1]*FH/sc.height/K];
+
+function draw(){
+  sctx.drawImage(img,0,0,FW,FH,0,0,sc.width,sc.height);
+  sctx.beginPath();
+  quad.forEach((p,i)=>{const[a,b]=fit(p);i?sctx.lineTo(a,b):sctx.moveTo(a,b);});
+  sctx.closePath();sctx.strokeStyle='#c0392b';sctx.lineWidth=2;sctx.stroke();
+  quad.forEach((p,i)=>{const[a,b]=fit(p);
+    sctx.fillStyle=i===cur?'#b00':'#fff';sctx.fillRect(a-5,b-5,10,10);
+    sctx.fillStyle='#000';sctx.font='11px monospace';sctx.fillText(NAMES[i],a+8,b+4);});
+}
+const ptsEl=document.getElementById('pts');
+function rows(){
+  ptsEl.innerHTML='';
+  quad.forEach((p,i)=>{
+    const b=document.createElement('b');b.textContent=NAMES[i];
+    b.className=i===cur?'on':'';b.onclick=()=>{cur=i;draw();rows();};
+    const x=document.createElement('input'),y=document.createElement('input');
+    x.value=Math.round(p[0]);y.value=Math.round(p[1]);
+    x.onchange=y.onchange=()=>{quad[i]=[+x.value,+y.value];draw();preview();};
+    ptsEl.append(b,x,y);});
+}
+rows();
+
+let drag=-1;
+sc.addEventListener('mousedown',e=>{
+  const r=sc.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+  drag=quad.findIndex(p=>{const[a,b]=fit(p);return Math.hypot(a-mx,b-my)<14;});
+  if(drag<0)drag=quad.findIndex(()=>false);
+});
+addEventListener('mousemove',e=>{
+  if(drag<0)return;
+  const r=sc.getBoundingClientRect();
+  quad[drag]=unfit([e.clientX-r.left,e.clientY-r.top]);
+  cur=drag;draw();rows();});
+addEventListener('mouseup',()=>{if(drag>=0){preview();drag=-1;}});
+addEventListener('keydown',e=>{
+  const d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+  if(!d)return;e.preventDefault();
+  const st=e.shiftKey?10:1;
+  quad[cur][0]+=d[0]*st;quad[cur][1]+=d[1]*st;draw();rows();preview();});
+
+function hom(s,d){ // src quad → dst rect, returns h[8]
+  const A=[],B=[];
+  for(let i=0;i<4;i++){const[x,y]=s[i],[u,v]=d[i];
+    A.push([x,y,1,0,0,0,-u*x,-u*y]);B.push(u);
+    A.push([0,0,0,x,y,1,-v*x,-v*y]);B.push(v);}
+  // gauss elim 8x8
+  for(let c=0;c<8;c++){
+    let m=c;for(let r=c+1;r<8;r++)if(Math.abs(A[r][c])>Math.abs(A[m][c]))m=r;
+    [A[c],A[m]]=[A[m],A[c]];[B[c],B[m]]=[B[m],B[c]];
+    for(let r=c+1;r<8;r++){const f=A[r][c]/A[c][c];
+      for(let k=c;k<8;k++)A[r][k]-=f*A[c][k];B[r]-=f*B[c];}}
+  const h=new Array(8);
+  for(let r=7;r>=0;r--){let s2=B[r];for(let k=r+1;k<8;k++)s2-=A[r][k]*h[k];h[r]=s2/A[r][r];}
+  return h;}
+
+function warp(dstW,dstH){ // quad in full-res → canvas dstW×dstH at FILE res
+  const q=quad.map(p=>[p[0]*K,p[1]*K]);
+  const h=hom([[0,0],[dstW,0],[dstW,dstH],[0,dstH]],q); // dst→src
+  const out=pctx.createImageData?new ImageData(dstW,dstH):null;
+  const od=out.data,sd=data.data,sw=FW;
+  for(let y=0;y<dstH;y++)for(let x=0;x<dstW;x++){
+    const w=h[6]*x+h[7]*y+1;
+    const sx=(h[0]*x+h[1]*y+h[2])/w, sy=(h[3]*x+h[4]*y+h[5])/w;
+    const i=(y*dstW+x)*4;
+    if(sx<0||sy<0||sx>=sw-1||sy>=FH-1){od[i+3]=255;continue;}
+    const x0=sx|0,y0=sy|0,fx=sx-x0,fy=sy-y0;
+    for(let c=0;c<3;c++){
+      const v=sd[(y0*sw+x0)*4+c]*(1-fx)*(1-fy)+sd[(y0*sw+x0+1)*4+c]*fx*(1-fy)
+             +sd[((y0+1)*sw+x0)*4+c]*(1-fx)*fy+sd[((y0+1)*sw+x0+1)*4+c]*fx*fy;
+      od[i+c]=v;}
+    od[i+3]=255;}
+  return out;}
+
+let pT=null;
+function preview(){
+  clearTimeout(pT);
+  pT=setTimeout(()=>{const o=warp(pc.width,pc.height);pctx.putImageData(o,0,0);},80);}
+
+document.getElementById('bCopy').onclick=()=>{
+  const t=JSON.stringify(quad.map(p=>p.map(Math.round)));
+  navigator.clipboard.writeText(t);
+  const o=document.createElement('textarea');o.value=t;document.body.appendChild(o);o.select();document.execCommand('copy');o.remove();
+  alert('copied: '+t);};
+document.getElementById('bDl').onclick=()=>{
+  const W=+document.getElementById('outw').value,H=+document.getElementById('outh').value;
+  const o=warp(W,H);
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  c.getContext('2d').putImageData(o,0,0);
+  const a=document.createElement('a');a.href=c.toDataURL('image/jpeg',0.92);a.download='warped.jpg';a.click();};
+document.getElementById('bReset').onclick=()=>{quad=DEF.map(p=>p.slice());draw();rows();preview();};
+</script>
+</body>
+</html>
