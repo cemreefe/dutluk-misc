@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anıtkabir — inscription typeface</title>
+<style>
+  @font-face {
+    font-family: 'Anitkabir';
+    src: url('Anitkabir-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #e8e2d0;
+    color: #1a1a18;
+    font-family: ui-sans-serif, system-ui, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 20px 80px; }
+  h1 {
+    font-family: 'Anitkabir', serif;
+    font-weight: normal;
+    font-size: clamp(56px, 10vw, 120px);
+    margin: 0 0 8px;
+    letter-spacing: 0.02em;
+  }
+  .meta { font-size: 14px; line-height: 1.6; max-width: 60ch; color: #333; }
+  .meta p { margin: 6px 0; }
+  .specimen {
+    font-family: 'Anitkabir', serif;
+    font-size: clamp(34px, 6vw, 72px);
+    line-height: 1.25;
+    margin: 40px 0;
+    word-break: break-all;
+  }
+  .tester { margin: 40px 0; }
+  .tester input {
+    width: 100%;
+    font-size: 18px;
+    padding: 10px 12px;
+    border: 1px solid #999;
+    background: #f4f0e2;
+    color: #1a1a18;
+  }
+  .tester .out {
+    font-family: 'Anitkabir', serif;
+    font-size: 64px;
+    margin-top: 16px;
+    min-height: 90px;
+    word-break: break-word;
+    line-height: 1.2;
+  }
+  .row { display: flex; gap: 16px; align-items: center; margin-top: 10px; font-size: 13px; color: #444; flex-wrap: wrap; }
+  .row input[type=range] { width: 200px; }
+  a.dl {
+    display: inline-block;
+    margin-top: 24px;
+    padding: 10px 18px;
+    background: #1a1a18;
+    color: #e8e2d0;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  footer { margin-top: 56px; font-size: 12px; color: #555; line-height: 1.7; }
+  code { background: #ddd6c2; padding: 1px 5px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ANITKABİR</h1>
+  <div class="meta">
+    <p>Inscription capitals digitized from the lettering Emin Barın cut into the walls of
+    Atatürk's mausoleum in 1952 (Gençliğe Hitabe and the 10th-Year Speech tablets).</p>
+    <p>Traced from Metin Akın's 2015 FontLab Studio digitization poster
+    (Hacettepe University, GRA666).</p>
+    <p>Coverage: A–Z except Q W X, plus Ç Ğ İ Ö Ş Ü and period.
+    Lowercase maps to the same capitals. No digits or other punctuation.</p>
+  </div>
+
+  <div class="specimen">ABCÇDEFG ĞHIİJKLM<br>NOÖPRSŞ TUÜVYZ.</div>
+
+  <div class="tester">
+    <input id="t" type="text" value="YURTTA SULH CİHANDA SULH" autocomplete="off" spellcheck="false">
+    <div class="out" id="o">YURTTA SULH CİHANDA SULH</div>
+    <div class="row">
+      <label>size <input id="s" type="range" min="24" max="140" value="64"></label>
+      <span id="sv">64px</span>
+      <span>unmapped characters fall back to the system font</span>
+    </div>
+  </div>
+
+  <a class="dl" href="Anitkabir-Regular.ttf" download>Download Anitkabir-Regular.ttf</a>
+
+  <footer>
+    <p>Lettering: Emin Barın (1952). Digitization: Metin Akın (2015).
+    This TTF is a poster re-trace for personal use — credit both names if you ship it.</p>
+  </footer>
+</main>
+<script>
+  const t = document.getElementById('t'), o = document.getElementById('o'),
+        s = document.getElementById('s'), sv = document.getElementById('sv');
+  t.addEventListener('input', () => o.textContent = t.value || ' ');
+  s.addEventListener('input', () => { o.style.fontSize = s.value + 'px'; sv.textContent = s.value + 'px'; });
+</script>
+</body>
+</html>
