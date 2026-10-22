@@ -207,7 +207,15 @@ function buildCt(){ctb.innerHTML='';
     b.className=ci===selC?'on':'';b.onclick=()=>{selC=ci;sel.clear();sync();draw();};ctb.appendChild(b);});
   const plus=document.createElement('button');plus.textContent='+';
   plus.onclick=()=>{snap();edits[g].push([]);selC=edits[g].length-1;markDirty();buildCt();sync();draw();};
-  ctb.appendChild(plus);}
+  ctb.appendChild(plus);
+  [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}]]
+    .forEach(([t,ti,fn])=>{const b=document.createElement('button');b.textContent=t;b.title=ti;b.onclick=fn;ctb.appendChild(b);});}
+let clipCont=null;
+function copyCont(){const c=(edits[g]||[])[selC];if(!c||!c.length)return;
+  clipCont=deep(c);document.getElementById('hint').textContent=`contour ${selC+1} copied (${c.length} nodes)`;}
+function pasteCont(){if(!clipCont)return;if(!edits[g])edits[g]=[];
+  snap();edits[g].push(deep(clipCont));selC=edits[g].length-1;
+  sel=new Set(edits[g][selC].map((n,ni)=>key(selC,ni)));markDirty();buildCt();sync();draw();}
 function init(){for(const k in edits)delete edits[k];
   for(const[k,d]of Object.entries(DATA.glyphs))edits[k]=toModel(d[0]);
   for(const k in dirty)delete dirty[k];
@@ -435,6 +443,8 @@ addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
   if((e.ctrlKey||e.metaKey)&&e.key==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
   if((e.ctrlKey||e.metaKey)&&e.key==='y'){e.preventDefault();redo();return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==='c'){e.preventDefault();copyCont();return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==='v'){e.preventDefault();pasteCont();return;}
   if(e.key==='a'||e.key==='A'){sel=allNodes();sync();draw();return;}
   if(e.key==='Delete'||e.key==='Backspace'){delSel();return;}
   const ar={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]}[e.key];
