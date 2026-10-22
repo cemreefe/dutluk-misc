@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anıtkabir glyph tracer</title>
+<link rel="icon" type="image/svg+xml" href="../logo.svg">
+<style>
+:root{--bg:#e8e2d0;--ink:#14100a;--line:#c8bfa4;--acc:#8a6d3b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-monospace,Menlo,Consolas,monospace}
+#app{display:flex;height:100vh;overflow:hidden}
+#side{width:190px;border-right:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+#side h1{font-size:15px;margin:0 0 4px}
+.gbtns{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.gbtns button{padding:5px 0;background:none;border:1px solid var(--line);cursor:pointer;font:inherit;color:var(--ink)}
+.gbtns button.on{background:var(--ink);color:var(--bg)}
+#main{flex:1;display:flex;flex-direction:column;align-items:center;overflow:auto}
+#bar{display:flex;gap:6px;padding:8px;flex-wrap:wrap;justify-content:center}
+#bar button,#bar label.btn{padding:5px 10px;background:none;border:1px solid var(--ink);cursor:pointer;font:inherit;color:var(--ink)}
+#bar button:hover{background:var(--ink);color:var(--bg)}
+canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:crosshair}
+#hint{padding:6px;font-size:12px;opacity:.75;text-align:center}
+#out{width:96%;height:110px;margin:8px;display:none;font:11px ui-monospace,monospace}
+.mod{color:var(--acc);font-weight:bold}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="side">
+  <h1>Tracer</h1>
+  <div id="hintside" style="font-size:11px">click: add point &middot; drag point: move<br>ctrl+click segment: insert &middot; dbl-click point: corner/smooth<br>del: remove point</div>
+  <div class="gbtns" id="gbtns"></div>
+  <label style="font-size:12px"><input type="checkbox" id="underlay" checked> photo underlay</label>
+  <label style="font-size:12px"><input type="range" id="uop" min="0" max="1" step="0.05" value="0.55"></label>
+</div>
+<div id="main">
+  <div id="bar">
+    <button id="bUndo">undo pt</button>
+    <button id="bDel">del pt</button>
+    <button id="bNew">new contour</button>
+    <button id="bClear">clear</button>
+    <button id="bReset">reset</button>
+    <button id="bExport">export</button>
+    <a href="../" style="align-self:center">← page</a>
+  </div>
+  <canvas id="cv" width="560" height="760"></canvas>
+  <div id="hint"></div>
+  <textarea id="out"></textarea>
+</div>
+</div>
+<script src="data.js"></script>
+<script>
+const CV=document.getElementById('cv'),ctx=CV.getContext('2d');
+const X0=-60,X1=680,Y0=-160,Y1=800; // font-unit window
+const S=CV.width/(X1-X0);
+const P=(x,y)=>[(x-X0)*S,(Y1-y)*S];   // font→canvas
+const F=(cx,cy)=>[cx/S+X0,Y1-cy/S];  // canvas→font
+
+// editable model: contour = [{x,y,s}] closed
+const edits={};
+for(const[g,d]of Object.entries(DATA.glyphs))edits[g]=toModel(d[0]);
+function toModel(conts){return conts.map(c=>{
+  const pts=[];let cur=null;
+  for(const seg of c){
+    if(seg[0]==='M'){cur=[seg[1],seg[2]];pts.push({x:cur[0],y:cur[1],s:false});}
+    else if(seg[0]==='L'){cur=[seg[1],seg[2]];pts.push({x:cur[0],y:cur[1],s:false});}
+    else if(seg[0]==='C'){ // sample cubic into 3 pts
+      const p0=cur,c1=[seg[1],seg[2]],c2=[seg[3],seg[4]],p1=[seg[5],seg[6]];
+      for(let i=1;i<=3;i++){const t=i/3,u=1-t;
+        pts.push({x:u*u*u*p0[0]+3*u*u*t*c1[0]+3*u*t*t*c2[0]+t*t*t*p1[0],
+                  y:u*u*u*p0[1]+3*u*u*t*c1[1]+3*u*t*t*c2[1]+t*t*t*p1[1],s:i<3});}
+      cur=p1;}
+  }return pts;});}
+function toCmds(pts){
+  const out=[],n=pts.length;if(!n)return out;
+  const ext=i=>pts[(i%n+n)%n];
+  out.push(['M',Math.round(pts[0].x),Math.round(pts[0].y)]);
+  for(let i=0;i<n-1;i++){
+    const p0=ext(i),p1=ext(i+1);
+    if(p0.s||p1.s){ // catmull-rom → cubic
+      const pm=ext(i-1),p2=ext(i+2);
+      const c1=[p0.x+(p1.x-pm.x)/6,p0.y+(p1.y-pm.y)/6];
+      const c2=[p1.x-(p2.x-p0.x)/6,p1.y-(p2.y-p0.y)/6];
+      out.push(['C',...c1,...c2,p1.x,p1.y].map(v=>Math.round(v*10)/10));
+    }else out.push(['L',Math.round(p1.x),Math.round(p1.y)]);
+  }return [out];}
+function pathOf(cont){
+  ctx.beginPath();
+  cont.forEach((p,i)=>{const[a,b]=P(p.x,p.y);i?ctx.lineTo(a,b):ctx.moveTo(a,b);});
+  ctx.closePath();}
+
+let g='5',ci=0,sel=-1,imgs={};
+for(const k in DATA.underlays){const im=new Image();im.src=DATA.underlays[k];im.onload=draw;imgs[k]=im;}
+
+const gb=document.getElementById('gbtns');
+for(const k of Object.keys(DATA.glyphs)){
+  const b=document.createElement('button');b.textContent=k;
+  b.onclick=()=>{g=k;ci=0;sel=-1;sync();draw();};
+  b.dataset.g=k;gb.appendChild(b);}
+function sync(){document.querySelectorAll('#gbtns button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
+  document.getElementById('hint').textContent=`glyph "${g}" · ${edits[g].length} contour(s) · editing contour ${ci+1}`;}
+
+function draw(){
+  ctx.clearRect(0,0,CV.width,CV.height);
+  // photo underlay: content box → caps-height 700, bottom on baseline, centered at x=280
+  const m=DATA.meta[g];
+  if(m&&imgs[g]&&document.getElementById('underlay').checked){
+    const ih=m.y1-m.y0,usc=S*700/ih;          // canvas px per image px
+    const [bx,by]=P(0,0);
+    const cx=bx+280*S-(m.x0+m.x1)*usc/2;       // box center → font x=280
+    const cy=by-m.y1*usc;                      // box bottom at baseline
+    ctx.globalAlpha=+document.getElementById('uop').value;
+    ctx.drawImage(imgs[g],cx,cy,imgs[g].width*usc,imgs[g].height*usc);
+    ctx.globalAlpha=1;}
+  // guides
+  ctx.strokeStyle='#b7ab86';ctx.lineWidth=1;
+  [0,700,-150].forEach(y=>{ctx.beginPath();ctx.moveTo(0,P(0,y)[1]);ctx.lineTo(CV.width,P(0,y)[1]);ctx.stroke();});
+  // fill + strokes + points
+  ctx.fillStyle='rgba(20,16,10,.14)';
+  edits[g].forEach(c=>{pathOf(c);ctx.fill();});
+  edits[g].forEach((c,i)=>{
+    pathOf(c);ctx.strokeStyle=i===ci?'#8a6d3b':'#555';ctx.lineWidth=1.5;ctx.stroke();
+    c.forEach((p,j)=>{const[a,b]=P(p.x,p.y);
+      ctx.fillStyle=j===sel?'#b00':(p.s?'#8a6d3b':'#14100a');
+      ctx.fillRect(a-3.5,b-3.5,7,7);});});
+}
+
+let drag=false;
+function pick(e){const r=CV.getBoundingClientRect(),cx=e.clientX-r.left,cy=e.clientY-r.top;
+  for(let i=edits[g].length-1;i>=0;i--)for(let j=edits[g][i].length-1;j>=0;j--){
+    const[a,b]=P(edits[g][i][j].x,edits[g][i][j].y);
+    if(Math.hypot(a-cx,b-cy)<9)return[i,j];}
+  return null;}
+CV.addEventListener('mousedown',e=>{
+  const hit=pick(e);
+  if(hit){[ci,sel]=hit;drag=true;}
+  else{
+    const[fx,fy]=F(e.clientX-CV.getBoundingClientRect().left,e.clientY-CV.getBoundingClientRect().top);
+    if(!edits[g].length)edits[g].push([]);
+    const c=edits[g][ci];
+    if(e.ctrlKey&&c.length>2){ // insert on nearest segment
+      let bi=0,bd=1e9;
+      for(let i=0;i<c.length;i++){const p0=c[i],p1=c[(i+1)%c.length];
+        const t=Math.max(0,Math.min(1,((fx-p0.x)*(p1.x-p0.x)+(fy-p0.y)*(p1.y-p0.y))/((p1.x-p0.x)**2+(p1.y-p0.y)**2||1)));
+        const d=Math.hypot(p0.x+t*(p1.x-p0.x)-fx,p0.y+t*(p1.y-p0.y)-fy);
+        if(d<bd){bd=d;bi=i;}}
+      if(bd<15){c.splice(bi+1,0,{x:fx,y:fy,s:e.shiftKey});sel=bi+1;draw();return;}}
+    c.push({x:fx,y:fy,s:e.shiftKey});sel=c.length-1;}
+  draw();});
+CV.addEventListener('mousemove',e=>{if(drag&&sel>=0){const r=CV.getBoundingClientRect();
+  const[fx,fy]=F(e.clientX-r.left,e.clientY-r.top);
+  edits[g][ci][sel].x=Math.round(fx);edits[g][ci][sel].y=Math.round(fy);draw();}});
+addEventListener('mouseup',()=>drag=false);
+CV.addEventListener('dblclick',e=>{const h=pick(e);if(h){edits[g][h[0]][h[1]].s=!edits[g][h[0]][h[1]].s;draw();}});
+addEventListener('keydown',e=>{if(e.key==='Delete'&&sel>=0){edits[g][ci].splice(sel,1);sel=-1;draw();}});
+document.getElementById('bUndo').onclick=()=>{edits[g][ci]?.pop();draw();};
+document.getElementById('bDel').onclick=()=>{if(sel>=0){edits[g][ci].splice(sel,1);sel=-1;draw();}};
+document.getElementById('bNew').onclick=()=>{edits[g].push([]);ci=edits[g].length-1;sel=-1;sync();draw();};
+document.getElementById('bClear').onclick=()=>{edits[g]=[[]];ci=0;sel=-1;draw();};
+document.getElementById('bReset').onclick=()=>{edits[g]=toModel(DATA.glyphs[g][0]);ci=0;sel=-1;draw();};
+document.getElementById('underlay').onchange=draw;
+document.getElementById('uop').oninput=draw;
+document.getElementById('bExport').onclick=()=>{
+  const out={};for(const[k,v]of Object.entries(edits))
+    out[k]={advance:DATA.glyphs[k][1],contours:v.map(toCmds).flat()};
+  const t=document.getElementById('out');t.style.display='block';
+  t.value=JSON.stringify(out);
+  const a=document.createElement('a');a.href='data:application/json,'+encodeURIComponent(t.value);
+  a.download='traced-glyphs.json';a.click();};
+sync();draw();
+</script>
+</body>
+</html>
