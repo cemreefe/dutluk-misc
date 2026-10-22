@@ -133,8 +133,7 @@ function draw(){
     const ih=m.y1-m.y0,usc=S*700/ih;          // canvas px per image px
     const [bx,by]=P(0,0);
     const uoff=DATA.meta[g].off||[0,0];
-    let xs=edits[g].flatMap(c=>c.map(p=>p.x));
-    const gcen=xs.length?(Math.min(...xs)+Math.max(...xs))/2:280;
+    const gcen=((DATA.glyphs[g]||[0,560])[1]||560)/2;   // stable: center of advance box
     const cx=bx+gcen*S-(m.x0+m.x1)*usc/2+uoff[0]*usc;
     const cy=by-m.y1*usc+uoff[1]*usc;          // box bottom at baseline
     ctx.globalAlpha=+document.getElementById('uop').value;
