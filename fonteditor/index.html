@@ -85,6 +85,10 @@ canvas{touch-action:none;cursor:crosshair}
     <span class="sep">|</span><span>photo</span>
     <button id="pL" title="shift = ×10">&#8592;</button><button id="pU">&#8593;</button><button id="pD">&#8595;</button><button id="pR">&#8594;</button>
     <button id="pOut" title="shrink photo (shift = faster)">-</button><button id="pIn" title="enlarge photo (shift = faster)">+</button>
+    <span class="sep">|</span><span>rotate</span>
+    <button id="rCCW" title="rotate counter-clockwise by deg">&#8634;</button>
+    <input id="rDeg" type="number" value="15" title="degrees" style="width:52px">
+    <button id="rCW" title="rotate clockwise by deg">&#8635;</button>
     <span class="sep">|</span>
     <button id="bAll">sel all</button>
     <button id="bSmooth">corner&#8646;smooth</button>
@@ -626,6 +630,21 @@ function scalePhoto(f){const m=DATA.meta[g];if(!m)return;
   m.sc=(m.sc||1)*f;autosave();draw();}
 document.getElementById('pIn').onclick=e=>scalePhoto(e.shiftKey?1.5:1.15);
 document.getElementById('pOut').onclick=e=>scalePhoto(1/(e.shiftKey?1.5:1.15));
+function rotNodes(deg){if(!deg)return;
+  const target=sel.size?sel:allNodes();
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  (edits[g]||[]).forEach((c,ci)=>c.forEach((n,ni)=>{if(target.has(key(ci,ni))){
+    x0=Math.min(x0,n.x);x1=Math.max(x1,n.x);y0=Math.min(y0,n.y);y1=Math.max(y1,n.y);}}));
+  if(x0>x1)return;snap();
+  const cx0=(x0+x1)/2,cy0=(y0+y1)/2,a=deg*Math.PI/180,cs=Math.cos(a),sn=Math.sin(a);
+  const rv=v=>[v[0]*cs-v[1]*sn,v[0]*sn+v[1]*cs];
+  (edits[g]||[]).forEach((c,ci)=>c.forEach((n,ni)=>{if(target.has(key(ci,ni))){
+    const rx=cx0+(n.x-cx0)*cs-(n.y-cy0)*sn,ry=cy0+(n.x-cx0)*sn+(n.y-cy0)*cs;
+    n.x=rx;n.y=ry;
+    if(n.o)n.o=rv(n.o);if(n.i)n.i=rv(n.i);}}));
+  markDirty();draw();}
+document.getElementById('rCCW').onclick=()=>rotNodes(+document.getElementById('rDeg').value||15);
+document.getElementById('rCW').onclick=()=>rotNodes(-(+document.getElementById('rDeg').value||15));
 document.getElementById('bAll').onclick=()=>{sel=allNodes();sync();draw();};
 document.getElementById('bSmooth').onclick=()=>{if(!sel.size)return;snap();
   sel.forEach(k=>{const[ci,ni]=k.split(':').map(Number);toggleSmooth(ci,ni);});
