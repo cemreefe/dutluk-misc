@@ -228,9 +228,56 @@ function buildCt(){ctb.innerHTML='';
   const plus=document.createElement('button');plus.textContent='+';
   plus.onclick=()=>{snap();edits[g].push([]);selC=edits[g].length-1;markDirty();buildCt();sync();draw();};
   ctb.appendChild(plus);
-  [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}]]
+  [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}],['merge','weld active contour with contours it overlaps',mergeCont]]
     .forEach(([t,ti,fn])=>{const b=document.createElement('button');b.textContent=t;b.title=ti;b.onclick=fn;ctb.appendChild(b);});}
 let clipCont=null,uimgs={};
+// ---------- polygon union (flattened) ----------
+function segInt2(a,b,c,d){const rx=b[0]-a[0],ry=b[1]-a[1],sx=d[0]-c[0],sy=d[1]-c[1];
+  const den=rx*sy-ry*sx;if(Math.abs(den)<1e-12)return null;
+  const t=((c[0]-a[0])*sy-(c[1]-a[1])*sx)/den,u=((c[0]-a[0])*ry-(c[1]-a[1])*rx)/den;
+  if(t>1e-6&&t<1-1e-6&&u>1e-6&&u<1-1e-6)return{t,u};return null;}
+function polyUnion(P,Q){
+  if(area(P)*area(Q)<0)Q=Q.slice().reverse();
+  const ints=[];
+  for(let i=0;i<P.length;i++)for(let j=0;j<Q.length;j++){
+    const a=P[i],b=P[(i+1)%P.length],c=Q[j],d=Q[(j+1)%Q.length];
+    const r=segInt2(a,b,c,d);if(!r)continue;
+    ints.push({i,j,t:r.t,u:r.u,x:a[0]+r.t*(b[0]-a[0]),y:a[1]+r.t*(b[1]-a[1])});}
+  if(!ints.length){
+    if(inside(P[0],Q))return Q;
+    if(inside(Q[0],P))return P;
+    return null;}
+  const onA={},onB={},pos={};
+  ints.forEach((v,id)=>{(onA[v.i]=onA[v.i]||[]).push({...v,id});(onB[v.j]=onB[v.j]||[]).push({...v,id});});
+  const build=(P,on,key)=>{const V=[];
+    for(let i=0;i<P.length;i++){V.push({x:P[i][0],y:P[i][1],inter:-1});
+      (on[i]||[]).sort((a,b)=>(key==='a'?a.t-b.t:a.u-b.u)).forEach(v=>{pos[v.id]=pos[v.id]||{};pos[v.id][key]=V.length;V.push({x:v.x,y:v.y,inter:v.id});});}
+    return V;};
+  const VA=build(P,onA,'a'),VB=build(Q,onB,'b');
+  const startIdx=pos[0].a,out=[],vis={};
+  let cur={poly:0,idx:startIdx},guard=0;
+  while(guard++<200000){const arr=cur.poly?VB:VA,v=arr[cur.idx];
+    if(v.inter>=0&&vis[v.inter]){out.push([v.x,v.y]);cur={poly:cur.poly,idx:(cur.idx+1)%arr.length};}
+    else if(v.inter>=0){vis[v.inter]=1;out.push([v.x,v.y]);cur={poly:1-cur.poly,idx:pos[v.inter][cur.poly?'a':'b']};}
+    else{out.push([v.x,v.y]);cur={poly:cur.poly,idx:(cur.idx+1)%arr.length};}
+    if(cur.poly===0&&cur.idx===startIdx)break;}
+  const res=[];for(const p of out){const l=res[res.length-1];
+    if(!l||Math.abs(l[0]-p[0])>1e-6||Math.abs(l[1]-p[1])>1e-6)res.push(p);}
+  if(res.length>1&&Math.abs(res[0][0]-res[res.length-1][0])<1e-6&&Math.abs(res[0][1]-res[res.length-1][1])<1e-6)res.pop();
+  return res;}
+function mergeCont(){const cs=edits[g];
+  if(!cs||cs.length<2||selC<0||selC>=cs.length||!cs[selC].length){
+    document.getElementById('hint').textContent='merge: pick a contour first';return;}
+  const polys=cs.map(c=>sampleCont(c,16));
+  let acc=polys[selC],used=[selC],changed=true;
+  while(changed){changed=false;
+    for(let k=0;k<polys.length;k++){if(used.includes(k))continue;
+      const r=polyUnion(acc,polys[k]);if(!r)continue;
+      acc=r;used.push(k);changed=true;}}
+  if(used.length<2){document.getElementById('hint').textContent='merge: active contour overlaps nothing';return;}
+  snap();edits[g]=cs.filter((c,ci)=>!used.includes(ci));
+  edits[g].push(acc.map(p=>({x:Math.round(p[0]*10)/10,y:Math.round(p[1]*10)/10,o:null,i:null})));
+  selC=edits[g].length-1;sel.clear();markDirty();buildCt();sync();draw();}
 function setUnderlay(src,w,h){uimgs[g]={src,w,h};
   const im=new Image();im.onload=()=>{imgs[g]=im;
     DATA.meta[g]={x0:0,y0:0,x1:w,y1:h,off:[0,0],sc:Math.min(1,Math.round(h/700*10)/10)};
@@ -295,7 +342,7 @@ function draw(){
     ctx.closePath();
     ctx.strokeStyle=ci===selC?CV_('acc'):CV_('ink2');ctx.lineWidth=1.5;ctx.stroke();});
   ctx.beginPath();
-  (edits[g]||[]).forEach(c=>{
+  fixWinding(edits[g]||[]).forEach(c=>{
     c.forEach((n,j)=>{const b=c[(j+1)%c.length];
       if(j===0){const[a0,b0]=P(n.x,n.y);ctx.moveTo(a0,b0);}
       const[a1,b1]=P(b.x,b.y);
@@ -303,7 +350,7 @@ function draw(){
         ctx.bezierCurveTo(h1[0],h1[1],h2[0],h2[1],a1,b1);}
       else ctx.lineTo(a1,b1);});
     ctx.closePath();});
-  ctx.fillStyle=CV_('fill');ctx.fill('evenodd');
+  ctx.fillStyle=CV_('fill');ctx.fill('nonzero');
   // handles (active contour + contours containing selected nodes)
   (edits[g]||[]).forEach((c,ci)=>{const show=ci===selC||c.some((n,ni)=>sel.has(key(ci,ni)));
     if(!show)return;
@@ -338,13 +385,13 @@ function drawPreview(){
     const adv=((DATA.glyphs[k]||[0,300])[1]||300)*sc;
     if(x+adv>pvcv.width-6){x=8;y+=ls;if(y>pvcv.height)break;}
     pvctx.beginPath();
-    for(const c of conts){const cmds=toCmds(c)[0];if(!cmds.length)continue;
+    for(const c of fixWinding(conts)){const cmds=toCmds(c)[0];if(!cmds.length)continue;
       cmds.forEach(seg=>{
         if(seg[0]==='M')pvctx.moveTo(x+seg[1]*sc,y-seg[2]*sc);
         else if(seg[0]==='L')pvctx.lineTo(x+seg[1]*sc,y-seg[2]*sc);
         else if(seg[0]==='C')pvctx.bezierCurveTo(x+seg[1]*sc,y-seg[2]*sc,x+seg[3]*sc,y-seg[4]*sc,x+seg[5]*sc,y-seg[6]*sc);});
       pvctx.closePath();}
-    pvctx.fill('evenodd');x+=adv;}
+    pvctx.fill('nonzero');x+=adv;}
 }
 pvtext.addEventListener('input',drawPreview);
 
