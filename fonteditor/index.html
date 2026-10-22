@@ -352,7 +352,7 @@ function draw(){
   [0,700,-150].forEach(y=>{ctx.beginPath();ctx.moveTo(0,P(0,y)[1]);ctx.lineTo(CV.width,P(0,y)[1]);ctx.stroke();});
   const gd=DATA.glyphs[g]||[0,700,0];
   ctx.strokeStyle=CV_('acc');
-  [gd[2],gd[1]-gd[2]].forEach(x=>{ctx.beginPath();ctx.moveTo(P(x,0)[0],0);ctx.lineTo(P(x,0)[0],CV.height);ctx.stroke();});
+  [inkXmin(),gd[1]].forEach(x=>{ctx.beginPath();ctx.moveTo(P(x,0)[0],0);ctx.lineTo(P(x,0)[0],CV.height);ctx.stroke();});
   // curves
   (edits[g]||[]).forEach((c,ci)=>{
     ctx.beginPath();
@@ -490,8 +490,8 @@ CV.addEventListener('mousedown',e=>{
     const s=segNear(fx,fy);
     if(s){snap();insertOnSegment(s[0],s[1],fx,fy);markDirty();sync();draw();return;}}
   const gd0=DATA.glyphs[g]||[0,700,0],tol=9/S();
-  if(Math.abs(fx-gd0[2])<tol){snap();drag={t:'bear'};return;}
-  if(Math.abs(fx-(gd0[1]-gd0[2]))<tol){snap();drag={t:'adv'};return;}
+  if(Math.abs(fx-inkXmin())<tol){snap();drag={t:'bear'};return;}
+  if(Math.abs(fx-gd0[1])<tol){snap();drag={t:'adv'};return;}
   if(tool==='pen'){snap();
     if(!edits[g].length){edits[g].push([]);selC=0;}
     if(selC<0||selC>=edits[g].length)selC=0;
@@ -511,10 +511,12 @@ CV.addEventListener('mousemove',e=>{
     pan=[e.clientX,e.clientY];autosave();draw();return;}
   if(!drag){
     const gd0=DATA.glyphs[g]||[0,700,0],tol=9/S();
-    CV.style.cursor=(Math.abs(fx-gd0[2])<tol||Math.abs(fx-(gd0[1]-gd0[2]))<tol)?'col-resize':'';
+    CV.style.cursor=(Math.abs(fx-inkXmin())<tol||Math.abs(fx-gd0[1])<tol)?'col-resize':'';
     return;}
-  if(drag.t==='bear'){const gd=DATA.glyphs[g];gd[2]=Math.round(fx);markDirty();draw();return;}
-  if(drag.t==='adv'){const gd=DATA.glyphs[g];gd[1]=Math.round(fx+gd[2]);markDirty();draw();return;}
+  if(drag.t==='bear'){const dx=Math.round(fx)-inkXmin();
+    if(dx){(edits[g]||[]).forEach(c=>c.forEach(n=>{n.x+=dx;}));
+      const gd=DATA.glyphs[g];gd[2]=Math.round(fx);markDirty();draw();}return;}
+  if(drag.t==='adv'){const gd=DATA.glyphs[g];gd[1]=Math.round(fx);markDirty();draw();return;}
   if(drag.t==='pen'){const c=edits[g][selC],n=c[drag.idx];
     const d=[fx-drag.fx,fy-drag.fy];
     n.o=[d[0],d[1]];n.i=[-d[0],-d[1]];markDirty();draw();return;}
@@ -579,7 +581,10 @@ addEventListener('drop',e=>{const f=[...(e.dataTransfer?.files||[])].find(f=>f.t
 CV.addEventListener('dblclick',e=>{const h=pickNode(e);if(h){snap();toggleSmooth(...h);markDirty();draw();}});
 
 // ---------- controls ----------
-document.getElementById('inb').onchange=e=>{const gd=DATA.glyphs[g];if(gd){snap();gd[2]=+e.target.value||0;markDirty();draw();}};
+document.getElementById('inb').onchange=e=>{const gd=DATA.glyphs[g];if(gd){snap();
+  const dx=(+e.target.value||0)-inkXmin();
+  (edits[g]||[]).forEach(c=>c.forEach(n=>{n.x+=dx;}));
+  gd[2]=+e.target.value||0;markDirty();draw();}};
 document.getElementById('ina').onchange=e=>{const gd=DATA.glyphs[g];if(gd){snap();gd[1]=+e.target.value||700;markDirty();draw();}};
 const bPen=document.getElementById('bPen'),bSel=document.getElementById('bSel');
 bPen.onclick=()=>{tool='pen';bPen.classList.add('on');bSel.classList.remove('on');};
@@ -611,6 +616,8 @@ function zoomView(z){const c=F(CV.width/2,CV.height/2);
   view={x0:c[0]-(c[0]-view.x0)*z,x1:c[0]+(view.x1-c[0])*z,y0:c[1]-(c[1]-view.y0)*z,y1:c[1]+(view.y1-c[1])*z};draw();}
 document.getElementById('zIn').onclick=()=>zoomView(1/1.2);
 document.getElementById('zOut').onclick=()=>zoomView(1.2);
+function inkXmin(){let m=Infinity;(edits[g]||[]).forEach(c=>c.forEach(n=>{if(n.x<m)m=n.x;}));
+  return m===Infinity?0:m;}
 function nudgeNodes(dx,dy){snap();const target=sel.size?sel:allNodes();
   (edits[g]||[]).forEach((c,ci)=>c.forEach((n,ni)=>{
     if(target.has(key(ci,ni))){n.x+=dx;n.y+=dy;}}));
