@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Anıtkabir glyph tracer</title>
-<link rel="icon" type="image/svg+xml" href="../logo.svg">
+<title>Font editor</title>
+<link rel="icon" type="image/svg+xml" href="../anitkabir/logo.svg">
 <style>
 :root{--bg:#e8e2d0;--ink:#14100a;--line:#c8bfa4;--acc:#8a6d3b}
 *{box-sizing:border-box}
@@ -28,7 +28,7 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
 <body>
 <div id="app">
 <div id="side">
-  <h1>Tracer</h1>
+  <h1>Font editor</h1>
   <div id="hintside" style="font-size:11px">click: add point &middot; drag point: move<br>ctrl+click segment: insert &middot; dbl-click point: corner/smooth<br>del: remove point</div>
   <div class="gbtns" id="gbtns"></div>
   <label style="font-size:12px"><input type="checkbox" id="underlay" checked> photo underlay</label>
@@ -42,14 +42,15 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
     <button id="bClear">clear</button>
     <button id="bReset">reset</button>
     <button id="bExport">export</button>
-    <a href="../" style="align-self:center">← page</a>
+    <label class="btn">open .json<input id="fopen" type="file" accept=".json,.js" hidden></label>
+    <a href="warp/" style="align-self:center">warp →</a>
   </div>
   <canvas id="cv" width="560" height="760"></canvas>
   <div id="hint"></div>
   <textarea id="out"></textarea>
 </div>
 </div>
-<script src="data.js"></script>
+<script src="anitkabir.js"></script>
 <script>
 const CV=document.getElementById('cv'),ctx=CV.getContext('2d');
 const X0=-60,X1=680,Y0=-160,Y1=800; // font-unit window
@@ -163,11 +164,29 @@ document.getElementById('underlay').onchange=draw;
 document.getElementById('uop').oninput=draw;
 document.getElementById('bExport').onclick=()=>{
   const out={};for(const[k,v]of Object.entries(edits))
-    out[k]={advance:DATA.glyphs[k][1],contours:v.map(toCmds).flat()};
+    out[k]={advance:(DATA.glyphs[k]||[0,700,0])[1],contours:v.map(toCmds).flat()};
   const t=document.getElementById('out');t.style.display='block';
   t.value=JSON.stringify(out);
   const a=document.createElement('a');a.href='data:application/json,'+encodeURIComponent(t.value);
   a.download='traced-glyphs.json';a.click();};
+document.getElementById('fopen').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  f.text().then(txt=>{
+    const j=JSON.parse(txt.replace(/^const DATA\s*=\s*/,'').replace(/;\s*$/,''));
+    const src=j.glyphs||j;
+    for(const[k,v]of Object.entries(src)){
+      if(v.contours){ // export format {advance,contours}
+        edits[k]=toModel(v.contours);
+        if(!DATA.glyphs[k])DATA.glyphs[k]=[v.contours,v.advance||700,0];
+      }else if(Array.isArray(v)){ // build format [contours,adv,bearing]
+        edits[k]=toModel(v[0]);DATA.glyphs[k]=v;
+      }
+    }
+    gb.innerHTML='';for(const k of Object.keys(DATA.glyphs)){
+      const b=document.createElement('button');b.textContent=k;
+      b.onclick=()=>{g=k;ci=0;sel=-1;sync();draw();};
+      b.dataset.g=k;gb.appendChild(b);}
+    g=Object.keys(src)[0];ci=0;sel=-1;sync();draw();});};
 sync();draw();
 </script>
 </body>
