@@ -20,9 +20,10 @@
     color: #1a1a18;
     font-family: ui-sans-serif, system-ui, Helvetica, Arial, sans-serif;
   }
-  main { max-width: 960px; margin: 0 auto; padding: 40px 20px 80px; }
+  main { max-width: 1360px; margin: 0 auto; padding: 40px 24px 80px;
+         display: grid; grid-template-columns: minmax(0,1fr) 430px; gap: 40px; }
+  @media (max-width: 940px) { main { grid-template-columns: 1fr; } }
   header { display: flex; align-items: center; gap: 16px; }
-  header img.mark { width: 64px; height: 60px; }
   .lang { margin-left: auto; font-size: 13px; }
   .lang button {
     background: none; border: 1px solid #999; padding: 4px 10px;
@@ -65,7 +66,8 @@
   }
   .row { display: flex; gap: 16px; align-items: center; margin-top: 10px; font-size: 13px; color: #444; flex-wrap: wrap; }
   .row input[type=range] { width: 200px; }
-  figure { margin: 44px 0 8px; }
+  figure { margin: 0; }
+  figure img { position: sticky; top: 24px; }
   figure img { width: 100%; border: 1px solid #b9ae8e; display: block; }
   figcaption { font-size: 13px; color: #555; margin-top: 8px; }
   a.dl, a.ed {
@@ -78,13 +80,13 @@
     font-size: 14px;
   }
   a.ed { background: none; color: #1a1a18; border: 1px solid #1a1a18; margin-left: 12px; }
-  footer { margin-top: 48px; font-size: 12px; color: #555; line-height: 1.7; }
+  footer { margin-top: 48px; font-size: 12px; color: #555; line-height: 1.7; grid-column: 1/-1; }
 </style>
 </head>
 <body>
 <main>
+  <div class="col">
   <header>
-    <img class="mark" src="logo.svg" alt="Anıtkabir A">
     <h1>ANITKABİR</h1>
     <div class="lang">
       <button id="btn-tr" class="on">TR</button><button id="btn-en">EN</button>
@@ -108,13 +110,14 @@
     </div>
   </div>
 
+  <a class="dl" href="Anitkabir-Regular.ttf" download data-i18n="dl"></a>
+  <a class="ed" href="/fonteditor/?set=anitkabir" data-i18n="ed"></a>
+  </div>
+
   <figure>
     <img src="tablet.jpg" alt="" data-i18n-alt="imgalt">
     <figcaption data-i18n="caption"></figcaption>
   </figure>
-
-  <a class="dl" href="Anitkabir-Regular.ttf" download data-i18n="dl"></a>
-  <a class="ed" href="/fonteditor/?set=anitkabir" data-i18n="ed"></a>
 
   <footer>
     <p data-i18n="credit"></p>
