@@ -16,6 +16,9 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 ui-monospace,M
 .gbtns button{padding:5px 0;background:none;border:1px solid var(--line);cursor:pointer;font:inherit;color:var(--ink)}
 .gbtns button.on{background:var(--ink);color:var(--bg)}
 #main{flex:1;display:flex;flex-direction:column;align-items:center;overflow:auto}
+#prev{width:300px;border-left:1px solid var(--line);padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+#pvtext{font:inherit;padding:6px 8px;border:1px solid var(--line);background:#f4f0e2;color:var(--ink)}
+#pvcv{border:1px solid var(--line);background:#efe9d8;width:100%}
 #bar{display:flex;gap:6px;padding:8px;flex-wrap:wrap;justify-content:center}
 #bar button,#bar label.btn{padding:5px 10px;background:none;border:1px solid var(--ink);cursor:pointer;font:inherit;color:var(--ink)}
 #bar button:hover{background:var(--ink);color:var(--bg)}
@@ -30,10 +33,11 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
 <div id="side">
   <h1>Font editor</h1>
   <label style="font-size:12px">font <select id="setsel" style="font:inherit;max-width:150px"></select></label>
-  <div id="hintside" style="font-size:11px">click: add point &middot; drag point: move<br>ctrl+click segment: insert &middot; dbl-click point: corner/smooth<br>del: remove point</div>
+  <div id="hintside" style="font-size:11px">click: add point &middot; drag point: move<br>ctrl+click segment: insert &middot; dbl-click point: corner/smooth<br>del: remove point &middot; arrows: nudge glyph<br>alt+drag/arrows: move photo</div>
   <div class="gbtns" id="gbtns"></div>
   <label style="font-size:12px"><input type="checkbox" id="underlay" checked> photo underlay</label>
   <label style="font-size:12px"><input type="range" id="uop" min="0" max="1" step="0.05" value="0.55"></label>
+  <div style="font-size:12px;margin-top:8px">metrics<br>bearing <input id="inb" type="number" style="width:60px;font:inherit"> adv <input id="ina" type="number" style="width:60px;font:inherit"></div>
 </div>
 <div id="main">
   <div id="bar">
@@ -49,6 +53,10 @@ canvas{border:1px solid var(--line);background:#efe9d8;touch-action:none;cursor:
   <canvas id="cv" width="560" height="760"></canvas>
   <div id="hint"></div>
   <textarea id="out"></textarea>
+</div>
+<div id="prev">
+  <input id="pvtext" value="HAMBURGEFONSTIV 012" autocomplete="off" spellcheck="false">
+  <canvas id="pvcv" width="280" height="420"></canvas>
 </div>
 </div>
 <script>
@@ -67,15 +75,15 @@ function toModel(conts){return conts.map(c=>{
     else if(seg[0]==='L'){cur=[seg[1],seg[2]];pts.push({x:cur[0],y:cur[1],s:false});}
     else if(seg[0]==='C'){ // sample cubic into 3 pts
       const p0=cur,c1=[seg[1],seg[2]],c2=[seg[3],seg[4]],p1=[seg[5],seg[6]];
-      for(let i=1;i<=3;i++){const t=i/3,u=1-t;
+      for(let i=1;i<=4;i++){const t=i/4,u=1-t;
         pts.push({x:u*u*u*p0[0]+3*u*u*t*c1[0]+3*u*t*t*c2[0]+t*t*t*p1[0],
-                  y:u*u*u*p0[1]+3*u*u*t*c1[1]+3*u*t*t*c2[1]+t*t*t*p1[1],s:i<3});}
+                  y:u*u*u*p0[1]+3*u*u*t*c1[1]+3*u*t*t*c2[1]+t*t*t*p1[1],s:i<4});}
       cur=p1;}
-    else if(seg[0]==='Q'){ // sample quadratic into 3 pts
+    else if(seg[0]==='Q'){ // sample quadratic into 4 pts
       const p0=cur,c=[seg[1],seg[2]],p1=[seg[3],seg[4]];
-      for(let i=1;i<=3;i++){const t=i/3,u=1-t;
+      for(let i=1;i<=4;i++){const t=i/4,u=1-t;
         pts.push({x:u*u*p0[0]+2*u*t*c[0]+t*t*p1[0],
-                  y:u*u*p0[1]+2*u*t*c[1]+t*t*p1[1],s:i<3});}
+                  y:u*u*p0[1]+2*u*t*c[1]+t*t*p1[1],s:i<4});}
       cur=p1;}
   }return pts;});}
 function toCmds(pts){
@@ -88,7 +96,7 @@ function toCmds(pts){
       const pm=ext(i-1),p2=ext(i+2);
       const c1=[p0.x+(p1.x-pm.x)/6,p0.y+(p1.y-pm.y)/6];
       const c2=[p1.x-(p2.x-p0.x)/6,p1.y-(p2.y-p0.y)/6];
-      out.push(['C',...c1,...c2,p1.x,p1.y].map(v=>Math.round(v*10)/10));
+      out.push(['C',...[...c1,...c2,p1.x,p1.y].map(v=>Math.round(v*10)/10)]);
     }else out.push(['L',Math.round(p1.x),Math.round(p1.y)]);
   }return [out];}
 function pathOf(cont){
@@ -104,14 +112,18 @@ function buildGlyphs(){
     const b=document.createElement('button');b.textContent=k;
     b.onclick=()=>{g=k;ci=0;sel=-1;sync();draw();};
     b.dataset.g=k;gb.appendChild(b);}}
+let lastUsc=1;
 function init(){
   for(const k in edits)delete edits[k];
   for(const[k,d]of Object.entries(DATA.glyphs))edits[k]=toModel(d[0]);
   imgs={};for(const k in DATA.underlays){const im=new Image();im.src=DATA.underlays[k];im.onload=draw;imgs[k]=im;}
   buildGlyphs();
-  g=Object.keys(DATA.glyphs)[0];ci=0;sel=-1;sync();draw();}
+  const q=new URLSearchParams(location.search).get('g');
+  g=(q&&DATA.glyphs[q])?q:Object.keys(DATA.glyphs)[0];ci=0;sel=-1;sync();draw();}
 function sync(){document.querySelectorAll('#gbtns button').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
-  document.getElementById('hint').textContent=`glyph "${g}" · ${edits[g].length} contour(s) · editing contour ${ci+1}`;}
+  document.getElementById('hint').textContent=`glyph "${g}" · ${edits[g].length} contour(s) · editing contour ${ci+1}`;
+  const gd=DATA.glyphs[g]||[0,700,0];
+  document.getElementById('inb').value=gd[2]||0;document.getElementById('ina').value=gd[1]||700;}
 
 function draw(){
   ctx.clearRect(0,0,CV.width,CV.height);
@@ -120,14 +132,20 @@ function draw(){
   if(m&&imgs[g]&&document.getElementById('underlay').checked){
     const ih=m.y1-m.y0,usc=S*700/ih;          // canvas px per image px
     const [bx,by]=P(0,0);
-    const cx=bx+280*S-(m.x0+m.x1)*usc/2;       // box center → font x=280
-    const cy=by-m.y1*usc;                      // box bottom at baseline
+    const uoff=DATA.meta[g].off||[0,0];
+    let xs=edits[g].flatMap(c=>c.map(p=>p.x));
+    const gcen=xs.length?(Math.min(...xs)+Math.max(...xs))/2:280;
+    const cx=bx+gcen*S-(m.x0+m.x1)*usc/2+uoff[0]*usc;
+    const cy=by-m.y1*usc+uoff[1]*usc;          // box bottom at baseline
     ctx.globalAlpha=+document.getElementById('uop').value;
     ctx.drawImage(imgs[g],cx,cy,imgs[g].width*usc,imgs[g].height*usc);
-    ctx.globalAlpha=1;}
-  // guides
+    ctx.globalAlpha=1;lastUsc=usc;}
+  // guides: horizontal + bearing/advance verticals
   ctx.strokeStyle='#b7ab86';ctx.lineWidth=1;
   [0,700,-150].forEach(y=>{ctx.beginPath();ctx.moveTo(0,P(0,y)[1]);ctx.lineTo(CV.width,P(0,y)[1]);ctx.stroke();});
+  const gd=DATA.glyphs[g]||[0,700,0];
+  ctx.strokeStyle='#c96';
+  [gd[2],gd[1]-gd[2]].forEach(x=>{ctx.beginPath();ctx.moveTo(P(x,0)[0],0);ctx.lineTo(P(x,0)[0],CV.height);ctx.stroke();});
   // fill + strokes + points
   ctx.fillStyle='rgba(20,16,10,.14)';
   edits[g].forEach(c=>{pathOf(c);ctx.fill();});
@@ -136,7 +154,33 @@ function draw(){
     c.forEach((p,j)=>{const[a,b]=P(p.x,p.y);
       ctx.fillStyle=j===sel?'#b00':(p.s?'#8a6d3b':'#14100a');
       ctx.fillRect(a-3.5,b-3.5,7,7);});});
+  drawPreview();
 }
+
+const pvcv=document.getElementById('pvcv'),pvctx=pvcv.getContext('2d');
+const pvtext=document.getElementById('pvtext');
+function drawPreview(){
+  const size=42,sc=size/1000,ls=56;
+  pvctx.clearRect(0,0,pvcv.width,pvcv.height);
+  pvctx.fillStyle='#14100a';
+  let x=8,y=ls;
+  for(const ch of pvtext.value){
+    let k=edits[ch]?ch:(edits[ch.toUpperCase()]?ch.toUpperCase():' ');
+    const conts=edits[k]||[];
+    const adv=((DATA.glyphs[k]||[0,300])[1]||300)*sc;
+    if(x+adv>pvcv.width-6){x=8;y+=ls;if(y>pvcv.height)break;}
+    pvctx.beginPath();
+    for(const c of conts){
+      const cmds=toCmds(c)[0];if(!cmds.length)continue;
+      cmds.forEach(seg=>{
+        if(seg[0]==='M')pvctx.moveTo(x+seg[1]*sc,y-seg[2]*sc);
+        else if(seg[0]==='L')pvctx.lineTo(x+seg[1]*sc,y-seg[2]*sc);
+        else if(seg[0]==='C')pvctx.bezierCurveTo(x+seg[1]*sc,y-seg[2]*sc,x+seg[3]*sc,y-seg[4]*sc,x+seg[5]*sc,y-seg[6]*sc);});
+      pvctx.closePath();}
+    pvctx.fill('evenodd');
+    x+=adv;}
+}
+pvtext.addEventListener('input',drawPreview);
 
 let drag=false;
 function pick(e){const r=CV.getBoundingClientRect(),cx=e.clientX-r.left,cy=e.clientY-r.top;
@@ -144,7 +188,9 @@ function pick(e){const r=CV.getBoundingClientRect(),cx=e.clientX-r.left,cy=e.cli
     const[a,b]=P(edits[g][i][j].x,edits[g][i][j].y);
     if(Math.hypot(a-cx,b-cy)<9)return[i,j];}
   return null;}
+let pan=null;
 CV.addEventListener('mousedown',e=>{
+  if(e.altKey&&imgs[g]){pan=[e.clientX,e.clientY];return;}
   const hit=pick(e);
   if(hit){[ci,sel]=hit;drag=true;}
   else{
@@ -160,12 +206,28 @@ CV.addEventListener('mousedown',e=>{
       if(bd<15){c.splice(bi+1,0,{x:fx,y:fy,s:e.shiftKey});sel=bi+1;draw();return;}}
     c.push({x:fx,y:fy,s:e.shiftKey});sel=c.length-1;}
   draw();});
-CV.addEventListener('mousemove',e=>{if(drag&&sel>=0){const r=CV.getBoundingClientRect();
+CV.addEventListener('mousemove',e=>{
+  if(pan){const m=DATA.meta[g];if(!m.off)m.off=[0,0];
+    m.off[0]+=(e.clientX-pan[0])/lastUsc;m.off[1]+=(e.clientY-pan[1])/lastUsc;
+    pan=[e.clientX,e.clientY];draw();return;}
+  if(drag&&sel>=0){const r=CV.getBoundingClientRect();
   const[fx,fy]=F(e.clientX-r.left,e.clientY-r.top);
   edits[g][ci][sel].x=Math.round(fx);edits[g][ci][sel].y=Math.round(fy);draw();}});
-addEventListener('mouseup',()=>drag=false);
+addEventListener('mouseup',()=>{drag=false;pan=null;});
 CV.addEventListener('dblclick',e=>{const h=pick(e);if(h){edits[g][h[0]][h[1]].s=!edits[g][h[0]][h[1]].s;draw();}});
-addEventListener('keydown',e=>{if(e.key==='Delete'&&sel>=0){edits[g][ci].splice(sel,1);sel=-1;draw();}});
+addEventListener('keydown',e=>{
+  if(e.key==='Delete'&&sel>=0){edits[g][ci].splice(sel,1);sel=-1;draw();return;}
+  const ar={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,1],ArrowDown:[0,-1]}[e.key];
+  if(!ar)return;
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  e.preventDefault();
+  const st=e.shiftKey?10:1;
+  if(e.altKey){ // pan underlay (image px)
+    const m=DATA.meta[g];if(!m)return;if(!m.off)m.off=[0,0];
+    m.off[0]+=ar[0]*st;m.off[1]-=ar[1]*st;draw();return;}
+  edits[g].forEach(c=>c.forEach(p=>{p.x+=ar[0]*st;p.y+=ar[1]*st;}));draw();});
+document.getElementById('inb').onchange=e=>{const gd=DATA.glyphs[g];if(gd){gd[2]=+e.target.value||0;draw();}};
+document.getElementById('ina').onchange=e=>{const gd=DATA.glyphs[g];if(gd){gd[1]=+e.target.value||700;draw();}};
 document.getElementById('bUndo').onclick=()=>{edits[g][ci]?.pop();draw();};
 document.getElementById('bDel').onclick=()=>{if(sel>=0){edits[g][ci].splice(sel,1);sel=-1;draw();}};
 document.getElementById('bNew').onclick=()=>{edits[g].push([]);ci=edits[g].length-1;sel=-1;sync();draw();};
@@ -174,8 +236,11 @@ document.getElementById('bReset').onclick=()=>{edits[g]=toModel(DATA.glyphs[g][0
 document.getElementById('underlay').onchange=draw;
 document.getElementById('uop').oninput=draw;
 document.getElementById('bExport').onclick=()=>{
-  const out={};for(const[k,v]of Object.entries(edits))
-    out[k]={advance:(DATA.glyphs[k]||[0,700,0])[1],contours:v.map(toCmds).flat()};
+  const out={__meta:{underlayOffsets:{}}};
+  for(const k in DATA.meta)if(DATA.meta[k].off)out.__meta.underlayOffsets[k]=DATA.meta[k].off;
+  for(const[k,v]of Object.entries(edits)){
+    const gd=DATA.glyphs[k]||[0,700,0];
+    out[k]={advance:gd[1],bearing:gd[2]||0,contours:v.map(toCmds).flat()};}
   const t=document.getElementById('out');t.style.display='block';
   t.value=JSON.stringify(out);
   const a=document.createElement('a');a.href='data:application/json,'+encodeURIComponent(t.value);
@@ -186,15 +251,19 @@ document.getElementById('fopen').onchange=e=>{
     const j=JSON.parse(txt.replace(/^const DATA\s*=\s*/,'').replace(/;\s*$/,''));
     const src=j.glyphs||j;
     for(const[k,v]of Object.entries(src)){
-      if(v.contours){ // export format {advance,contours}
+      if(v.contours){ // export format {advance,bearing,contours}
         edits[k]=toModel(v.contours);
         if(!DATA.glyphs[k])DATA.glyphs[k]=[v.contours,v.advance||700,0];
+        else{DATA.glyphs[k][1]=v.advance||DATA.glyphs[k][1];DATA.glyphs[k][2]=v.bearing||0;}
       }else if(Array.isArray(v)){ // build format [contours,adv,bearing]
         edits[k]=toModel(v[0]);DATA.glyphs[k]=v;
       }
     }
+    if(j.__meta&&j.__meta.underlayOffsets)
+      for(const k in j.__meta.underlayOffsets)
+        if(DATA.meta[k])DATA.meta[k].off=j.__meta.underlayOffsets[k];
     buildGlyphs();
-    g=Object.keys(src)[0];ci=0;sel=-1;sync();draw();});};
+    g=Object.keys(src).find(k=>k!=='__meta')||Object.keys(src)[0];ci=0;sel=-1;sync();draw();});};
 const FONTS=['default','anitkabir'];
 const setsel=document.getElementById('setsel');
 FONTS.forEach(s=>{const o=document.createElement('option');o.value=o.textContent=s;setsel.appendChild(o);});
