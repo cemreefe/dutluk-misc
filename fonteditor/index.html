@@ -131,8 +131,8 @@ function toModel(conts){return conts.map(c=>{
 function toCmds(nodes){
   const out=[],n=nodes.length;if(!n)return out;
   out.push(['M',Math.round(nodes[0].x),Math.round(nodes[0].y)]);
-  for(let j=0;j<n-1;j++){
-    const a=nodes[j],b=nodes[j+1];
+  for(let j=0;j<n;j++){
+    const a=nodes[j],b=nodes[(j+1)%n];
     if(a.o||b.i)out.push(['C',...( [a.x+(a.o?a.o[0]:0),a.y+(a.o?a.o[1]:0),
       b.x+(b.i?b.i[0]:0),b.y+(b.i?b.i[1]:0),b.x,b.y].map(v=>Math.round(v*10)/10) )]);
     else out.push(['L',Math.round(b.x),Math.round(b.y)]);}
