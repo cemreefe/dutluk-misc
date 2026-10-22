@@ -63,8 +63,8 @@
   }
   .row { display: flex; gap: 16px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--ink2); flex-wrap: wrap; }
   .row input[type=range] { width: 200px; }
+  .photos { display: flex; flex-direction: column; gap: 28px; }
   figure { margin: 0; }
-  figure img { position: sticky; top: 24px; }
   figure img { width: 100%; border: 1px solid var(--line); display: block; }
   figcaption { font-size: 13px; color: var(--ink2); margin-top: 8px; }
   a.dl, a.ed {
@@ -111,10 +111,16 @@
   <a class="ed" href="/fonteditor/?set=anitkabir" data-i18n="ed"></a>
   </div>
 
+  <div class="photos">
   <figure>
     <img src="tablet.jpg" alt="" data-i18n-alt="imgalt">
     <figcaption data-i18n="caption"></figcaption>
   </figure>
+  <figure>
+    <img src="tablet2.jpg" alt="" data-i18n-alt="imgalt2">
+    <figcaption data-i18n="caption2"></figcaption>
+  </figure>
+  </div>
 
   <footer>
     <p data-i18n="credit"></p>
@@ -129,8 +135,10 @@ const I18N = {
     cov: "Kapsam: Q W X dışında A–Z, ayrıca Ç Ğ İ Ö Ş Ü, şapkalı Â Î Û, 0–9 ve noktalama işaretleri. Küçük harfler aynı büyük harflere eşlenir.",
     size: 'boyut',
     fallback: 'tanımsız karakterler sistem fontuna düşer',
-    caption: 'Özgün kitabe — Anıtkabir, Emin Barın, 1952. Fontta İ ile Â şapkası taş üzerinden modellendi.',
+    caption: 'Onuncu Yıl Nutku kitabesi — Emin Barın, 1952. Fontta İ ile Â şapkası bu taş üzerinden modellendi.',
+    caption2: 'İsmet İnönü\'nün Atatürk\'e ithaf kitabesi — 21 Kasım 1938.',
     imgalt: 'Anıtkabir kitabesi, perspektif düzeltilmiş fotoğraf',
+    imgalt2: 'İsmet İnönü\'nün ithaf kitabesi, perspektif düzeltilmiş fotoğraf',
     dl: 'Anitkabir-Regular.ttf indir',
     ed: 'Bir harfi düzelt → tracer',
     credit: 'Harf çizimi: Emin Barın (1952). Sayısallaştırma: Metin Akın (2015). Bu TTF poster üzerinden izlenmiştir — kişisel kullanım için; yayınlarsanız iki ismi de anın.',
@@ -143,8 +151,10 @@ const I18N = {
     cov: "Coverage: A–Z except Q W X, plus Ç Ğ İ Ö Ş Ü, circumflexed Â Î Û, 0–9 and punctuation. Lowercase maps to the same capitals.",
     size: 'size',
     fallback: 'unmapped characters fall back to the system font',
-    caption: 'The original inscription — Anıtkabir, lettering by Emin Barın, 1952. Deskewed photo.',
+    caption: '10th-Year Speech tablet — lettering by Emin Barın, 1952. The İ/Â circumflex in the font was modelled on this stone.',
+    caption2: 'İsmet İnönü\'s dedication to Atatürk — 21 November 1938.',
     imgalt: 'The Anıtkabir inscription, perspective-corrected photo',
+    imgalt2: 'İsmet İnönü\'s dedication tablet, perspective-corrected photo',
     dl: 'Download Anitkabir-Regular.ttf',
     ed: 'Fix a glyph → tracer',
     credit: 'Lettering: Emin Barın (1952). Digitization: Metin Akın (2015). This TTF is a poster re-trace for personal use — credit both names if you ship it.',
