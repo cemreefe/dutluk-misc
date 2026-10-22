@@ -31,6 +31,7 @@ canvas{touch-action:none;cursor:crosshair}
 .ctbar{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
 .ctbar button{padding:2px 8px;font:inherit;border:1px solid var(--line);background:none;cursor:pointer;color:var(--ink)}
 .ctbar button.on{background:var(--ink);color:var(--bg)}
+.ctbar button.neg{border-style:dashed;border-color:var(--danger)}
 #split{width:6px;cursor:col-resize;background:var(--line);flex:none}
 #split:hover{background:var(--acc)}
 #bar2{display:flex;gap:4px;padding:6px;flex-wrap:wrap;justify-content:center;align-items:center;font-size:12px}
@@ -168,11 +169,12 @@ function inside(p,pts){let w=0;for(let j=0;j<pts.length;j++){const a=pts[j],b=pt
   if(a[1]<=p[1]){if(b[1]>p[1]&&(b[0]-a[0])*(p[1]-a[1])-(p[0]-a[0])*(b[1]-a[1])>0)w++;}
   else if(b[1]<=p[1]&&(b[0]-a[0])*(p[1]-a[1])-(p[0]-a[0])*(b[1]-a[1])<0)w--;}return w!==0;}
 // normalize winding for TTF: outer contours CW (neg area), holes CCW, alternating by depth
-function fixWinding(nodes){
+function fixWinding(nodes,negs){
   const polys=nodes.map(c=>sampleCont(c));
   const depths=nodes.map((c,i)=>{let d=0;for(let k=0;k<polys.length;k++)if(k!==i&&inside(polys[i][0],polys[k]))d++;return d;});
   return nodes.map((c,i)=>{
-    const wantNeg=depths[i]%2===0;
+    let wantNeg=depths[i]%2===0;
+    if(negs&&negs.has(i))wantNeg=!wantNeg;
     const neg=area(polys[i])<0;
     if(wantNeg===neg)return c;
     return c.slice().reverse().map(n=>({x:n.x,y:n.y,o:n.i?n.i.slice():null,i:n.o?n.o.slice():null}));});}
@@ -198,7 +200,8 @@ function redo(){if(!hist.r.length)return;hist.u.push(deep({e:edits[g],adv:DATA.g
 const LS='fe_';
 let saveT=null;
 function autosave(){clearTimeout(saveT);saveT=setTimeout(()=>{
-  const st={edits,metrics:{},uoff:{}};
+  const st={edits,metrics:{},uoff:{},neg:{}};
+  for(const k in neg)st.neg[k]=[...neg[k]];
   for(const k in DATA.glyphs)st.metrics[k]=[DATA.glyphs[k][1],DATA.glyphs[k][2]||0];
   for(const k in DATA.meta){const m=DATA.meta[k];
     if(m.off||m.sc)st.uoff[k]={off:m.off,sc:m.sc};}
@@ -213,6 +216,7 @@ function restore(){try{const st=JSON.parse(localStorage.getItem(LS+setsel.value)
   for(const k in st.uoff||{})if(DATA.meta[k]){const u=st.uoff[k];
     if(Array.isArray(u))DATA.meta[k].off=u;
     else{DATA.meta[k].off=u.off;DATA.meta[k].sc=u.sc;}}
+  for(const k in st.neg||{})neg[k]=new Set(st.neg[k]);
   return true;}catch(e){return false;}}
 
 // ---------- glyph grid / contours ----------
@@ -224,13 +228,15 @@ function buildGlyphs(){gb.innerHTML='';
   sync();}
 function buildCt(){ctb.innerHTML='';
   (edits[g]||[]).forEach((c,ci)=>{const b=document.createElement('button');b.textContent=ci+1;
-    b.className=ci===selC?'on':'';b.onclick=()=>{selC=ci;sel.clear();sync();draw();};ctb.appendChild(b);});
+    b.className=(ci===selC?'on':'')+(neg[g]&&neg[g].has(ci)?' neg':'');
+    if(neg[g]&&neg[g].has(ci))b.textContent=ci+1+'−';
+    b.onclick=()=>{selC=ci;sel.clear();sync();draw();};ctb.appendChild(b);});
   const plus=document.createElement('button');plus.textContent='+';
   plus.onclick=()=>{snap();edits[g].push([]);selC=edits[g].length-1;markDirty();buildCt();sync();draw();};
   ctb.appendChild(plus);
-  [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}],['merge','weld active contour with contours it overlaps',mergeCont]]
+  [['copy','copy contour (ctrl/cmd+C)',copyCont],['paste','paste contour (ctrl/cmd+V)',pasteCont],['dup','duplicate contour',()=>{copyCont();pasteCont();}],['merge','weld active contour with contours it overlaps',mergeCont],['±','toggle contour positive/negative (subtracts on overlap)',()=>{if(selC<0)return;neg[g]=neg[g]||new Set();neg[g].has(selC)?neg[g].delete(selC):neg[g].add(selC);snap();autosave();buildCt();draw();}]]
     .forEach(([t,ti,fn])=>{const b=document.createElement('button');b.textContent=t;b.title=ti;b.onclick=fn;ctb.appendChild(b);});}
-let clipCont=null,uimgs={};
+let clipCont=null,uimgs={},neg={};
 // ---------- polygon union (flattened) ----------
 function segInt2(a,b,c,d){const rx=b[0]-a[0],ry=b[1]-a[1],sx=d[0]-c[0],sy=d[1]-c[1];
   const den=rx*sy-ry*sx;if(Math.abs(den)<1e-12)return null;
@@ -342,7 +348,7 @@ function draw(){
     ctx.closePath();
     ctx.strokeStyle=ci===selC?CV_('acc'):CV_('ink2');ctx.lineWidth=1.5;ctx.stroke();});
   ctx.beginPath();
-  fixWinding(edits[g]||[]).forEach(c=>{
+  fixWinding(edits[g]||[],neg[g]).forEach(c=>{
     c.forEach((n,j)=>{const b=c[(j+1)%c.length];
       if(j===0){const[a0,b0]=P(n.x,n.y);ctx.moveTo(a0,b0);}
       const[a1,b1]=P(b.x,b.y);
@@ -385,7 +391,7 @@ function drawPreview(){
     const adv=((DATA.glyphs[k]||[0,300])[1]||300)*sc;
     if(x+adv>pvcv.width-6){x=8;y+=ls;if(y>pvcv.height)break;}
     pvctx.beginPath();
-    for(const c of fixWinding(conts)){const cmds=toCmds(c)[0];if(!cmds.length)continue;
+    for(const c of fixWinding(conts,neg[k])){const cmds=toCmds(c)[0];if(!cmds.length)continue;
       cmds.forEach(seg=>{
         if(seg[0]==='M')pvctx.moveTo(x+seg[1]*sc,y-seg[2]*sc);
         else if(seg[0]==='L')pvctx.lineTo(x+seg[1]*sc,y-seg[2]*sc);
@@ -463,6 +469,9 @@ CV.addEventListener('mousedown',e=>{
   if(e.ctrlKey||e.metaKey){ // insert on segment
     const s=segNear(fx,fy);
     if(s){snap();insertOnSegment(s[0],s[1],fx,fy);markDirty();sync();draw();return;}}
+  const gd0=DATA.glyphs[g]||[0,700,0],tol=9/S();
+  if(Math.abs(fx-gd0[2])<tol){snap();drag={t:'bear'};return;}
+  if(Math.abs(fx-(gd0[1]-gd0[2]))<tol){snap();drag={t:'adv'};return;}
   if(tool==='pen'){snap();
     if(!edits[g].length){edits[g].push([]);selC=0;}
     if(selC<0||selC>=edits[g].length)selC=0;
@@ -480,7 +489,12 @@ CV.addEventListener('mousemove',e=>{
   if(pan){const m=DATA.meta[g];if(!m.off)m.off=[0,0];
     m.off[0]+=(e.clientX-pan[0])/lastUsc;m.off[1]+=(e.clientY-pan[1])/lastUsc;
     pan=[e.clientX,e.clientY];autosave();draw();return;}
-  if(!drag)return;
+  if(!drag){
+    const gd0=DATA.glyphs[g]||[0,700,0],tol=9/S();
+    CV.style.cursor=(Math.abs(fx-gd0[2])<tol||Math.abs(fx-(gd0[1]-gd0[2]))<tol)?'col-resize':'';
+    return;}
+  if(drag.t==='bear'){const gd=DATA.glyphs[g];gd[2]=Math.round(fx);markDirty();draw();return;}
+  if(drag.t==='adv'){const gd=DATA.glyphs[g];gd[1]=Math.round(fx+gd[2]);markDirty();draw();return;}
   if(drag.t==='pen'){const c=edits[g][selC],n=c[drag.idx];
     const d=[fx-drag.fx,fy-drag.fy];
     n.o=[d[0],d[1]];n.i=[-d[0],-d[1]];markDirty();draw();return;}
@@ -567,7 +581,7 @@ document.getElementById('bExport').onclick=()=>{
     if(DATA.meta[k].sc&&DATA.meta[k].sc!==1)out.__meta.underlayScales[k]=DATA.meta[k].sc;}
   for(const[k,v]of Object.entries(edits)){
     const gd=DATA.glyphs[k]||[0,700,0];
-    out[k]={advance:gd[1],bearing:gd[2]||0,contours:fixWinding(v).map(toCmds).flat()};}
+    out[k]={advance:gd[1],bearing:gd[2]||0,contours:fixWinding(v,neg[k]).map(toCmds).flat()};}
   const t=document.getElementById('out');t.style.display='block';
   t.value=JSON.stringify(out);
   const a=document.createElement('a');a.href='data:application/json,'+encodeURIComponent(t.value);
